@@ -261,10 +261,31 @@ def _collect(reqs, wall_ms, busy_ms, **extra):
 
 
 def metrics(rec, meta, warmup=WARMUP_FRACTION):
-    """Summarise a run, discarding a warm-up prefix so results are steady-state."""
+    """Summarise a run, discarding a warm-up prefix so results are steady-state.
+
+    Normalised latency divides end-to-end latency by output tokens, so for a
+    one-token request it degenerates to raw latency. Short-output requests can
+    therefore dominate the mean, and a shortest-first policy would be rewarded
+    partly by construction. We report the metric restricted to longer requests
+    alongside the headline so that concern is testable rather than latent.
+    """
     k = int(len(rec) * warmup)
     r = rec[k:]
+    long_mask = r["gen"] >= 8
+    tot = r["norm_latency"].sum()
+    short = r["norm_latency"][r["gen"] <= 4].sum()
     return {
+        "frac_requests_gen_le4": float((r["gen"] <= 4).mean()),
+        "frac_normlat_from_gen_le4": float(short / tot) if tot > 0 else float("nan"),
+        "norm_latency_mean_gen_ge8": (
+            float(r["norm_latency"][long_mask].mean()) if long_mask.any()
+            else float("nan")
+        ),
+        "latency_p50_gen_ge8": (
+            float(np.percentile(r["latency"][long_mask], 50)) if long_mask.any()
+            else float("nan")
+        ),
+        "norm_latency_median": float(np.percentile(r["norm_latency"], 50)),
         "n": int(len(r)),
         "utilisation": float(meta["utilisation"]),
         "prefill_time_share": float(meta.get("prefill_time_share", float("nan"))),

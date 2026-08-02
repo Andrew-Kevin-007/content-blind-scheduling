@@ -1,0 +1,147 @@
+"""Audit every quantitative claim in the paper against results/.
+
+The paper states that no number in it is transcribed by hand. One number
+(SLO attainment at low load) survived an earlier revision without being
+regenerated, which falsified that claim until it was caught. This script exists
+so the claim is checkable rather than asserted.
+
+Each entry pairs a value as printed in the PDF with the file, column and
+selection that should produce it. A mismatch beyond the stated tolerance fails.
+"""
+
+from __future__ import annotations
+
+import json
+import sys
+
+import numpy as np
+import pandas as pd
+
+from config import RESULTS
+
+runs = pd.DataFrame(json.loads((RESULTS / "raw" / "runs.json").read_text()))
+head = json.loads((RESULTS / "headline.json").read_text())
+work = json.loads((RESULTS / "work_share.json").read_text())
+tok = json.loads((RESULTS / "token_ratio.json").read_text())
+tail = pd.read_csv(RESULTS / "tail_analysis.csv")
+tests = pd.read_csv(RESULTS / "paired_tests.csv")
+contrib = pd.read_csv(RESULTS / "predictor_contribution.csv")
+predtest = pd.read_csv(RESULTS / "sjf_pred_vs_fcfs.csv")
+robust = pd.read_csv(RESULTS / "metric_robustness.csv")
+gen = pd.read_csv(RESULTS / "sensitivity_genlen.csv")
+cache = pd.read_csv(RESULTS / "sensitivity_cache.csv")
+pshare = pd.read_csv(RESULTS / "prefill_time_share.csv", index_col=0)
+evals = pd.DataFrame(json.loads((RESULTS / "raw" / "predictor_eval.json").read_text()))
+
+
+def cell(df, wl, load, col):
+    r = df[(df.workload == wl) & (df.target_load == load)]
+    return float(r[col].iloc[0])
+
+
+def t2(wl, pol, col, load=0.92):
+    r = runs[(runs.workload == wl) & (runs.target_load == load) & (runs.policy == pol)]
+    return float(r[col].mean())
+
+
+CHECKS = [
+    # (label, printed value, computed value, tolerance)
+    ("abstract prefill marginal conv", 91.2, work["conv"]["prefill_pct"], 0.05),
+    ("abstract prefill marginal code", 98.7, work["code"]["prefill_pct"], 0.05),
+    ("abstract engine-time conv @.92", 76, 100 * pshare.loc[0.92, "conv"], 0.5),
+    ("abstract engine-time code @.92", 92, 100 * pshare.loc[0.92, "code"], 0.5),
+    ("abstract improvement conv", 51.5, head["conv"]["improvement_pct_high_load_mean"], 0.05),
+    ("abstract improvement code", 58.8, head["code"]["improvement_pct_high_load_mean"], 0.05),
+    ("abstract oracle gap conv", 90.3, head["conv"]["oracle_gap_recovered_pct_high_load"], 0.05),
+    ("abstract oracle gap code", 79.3, head["code"]["oracle_gap_recovered_pct_high_load"], 0.05),
+    ("abstract p99 mean conv @.98", 1.9, cell(tail, "conv", 0.98, "p99_ratio_mean"), 0.05),
+    ("abstract p99 mean code @.98", 3.1, cell(tail, "code", 0.98, "p99_ratio_mean"), 0.05),
+    ("abstract p99 max conv @.98", 4.6, cell(tail, "conv", 0.98, "p99_ratio_max"), 0.05),
+    ("abstract p99 max code @.98", 6.1, cell(tail, "code", 0.98, "p99_ratio_max"), 0.05),
+
+    ("III mean ctx conv", 1632, work["conv"]["mean_context_tokens"], 1.0),
+    ("III mean ctx code", 2511, work["code"]["mean_context_tokens"], 1.0),
+    ("III mean out conv", 106, work["conv"]["mean_output_tokens"], 1.0),
+    ("III mean out code", 23, work["code"]["mean_output_tokens"], 1.0),
+    ("III token ratio conv", 15.5, tok["conv"]["token_ratio"], 0.05),
+    ("III token ratio code", 110.7, tok["code"]["token_ratio"], 0.05),
+    ("III engine-time conv @.60", 53.9, 100 * pshare.loc[0.60, "conv"], 0.05),
+    ("III engine-time code @.60", 81.8, 100 * pshare.loc[0.60, "code"], 0.05),
+    ("III engine-time conv @.92", 75.6, 100 * pshare.loc[0.92, "conv"], 0.05),
+    ("III engine-time code @.92", 92.4, 100 * pshare.loc[0.92, "code"], 0.05),
+    ("III spearman conv", 0.365, head["conv"]["predictor_spearman"], 0.001),
+    ("III spearman code", 0.107, head["code"]["predictor_spearman"], 0.001),
+    ("III pairwise conv", 0.633, head["conv"]["predictor_pairwise_acc"], 0.001),
+    ("III pairwise code", 0.537, head["code"]["predictor_pairwise_acc"], 0.001),
+
+    ("V capacity conv", 1.79, head["conv"]["capacity_rps"], 0.005),
+    ("V capacity code", 1.41, head["code"]["capacity_rps"], 0.005),
+    ("V utilisation conv @.60", 0.91, head["conv"]["measured_utilisation_060"], 0.005),
+    ("V utilisation code @.60", 0.71, head["code"]["measured_utilisation_060"], 0.005),
+    ("V span min", 3.7, evals.span_used_minutes.min(), 0.05),
+    ("V span max", 19.9, evals.span_used_minutes.max(), 0.05),
+
+    ("VI L_n FCFS conv", 1161, t2("conv", "fcfs", "norm_latency_mean"), 1.0),
+    ("VI L_n CB conv", 506, t2("conv", "cb_sjf_work", "norm_latency_mean"), 1.0),
+    ("VI L_n Ctx conv", 505, t2("conv", "sjf_context", "norm_latency_mean"), 1.0),
+    ("VI L_n FCFS code", 16724, t2("code", "fcfs", "norm_latency_mean"), 1.0),
+    ("VI L_n CB code", 6327, t2("code", "cb_sjf_work", "norm_latency_mean"), 1.0),
+    ("VI L_n Ctx code", 6337, t2("code", "sjf_context", "norm_latency_mean"), 1.0),
+    ("VI L_n SJF-Pred code", 23081, t2("code", "predicted_sjf", "norm_latency_mean"), 1.0),
+    # Both figures in this sentence are averages over rho >= 0.85, so the
+    # per-window mean must be selected the same way as the ratio-of-means.
+    ("VI perwindow mean conv", 47.0, head["conv"]["improvement_perwindow_mean_high_load"], 0.1),
+    ("VI ratio-of-means conv", 51.5, head["conv"]["improvement_pct_high_load_mean"], 0.05),
+    ("VI gen<=4 frac conv", 10.9, 100 * cell(robust, "conv", 0.92, "frac_requests_gen_le4"), 0.1),
+    ("VI gen<=4 frac code", 36.5, 100 * cell(robust, "code", 0.92, "frac_requests_gen_le4"), 0.1),
+    ("VI gen<=4 metric conv", 50.2, 100 * cell(robust, "conv", 0.92, "frac_normlat_from_gen_le4"), 0.2),
+    ("VI gen<=4 metric code", 78.6, 100 * cell(robust, "code", 0.92, "frac_normlat_from_gen_le4"), 0.2),
+    ("VI gen>=8 improvement conv", 47.0, head["conv"]["improvement_gen_ge8_high_load"], 0.1),
+    ("VI gen>=8 improvement code", 48.5, head["code"]["improvement_gen_ge8_high_load"], 0.1),
+    ("VI tail worse code cells", 31, tail[(tail.workload == "code") & (tail.target_load >= 0.85)].windows_tail_worse.sum(), 0),
+    ("VI tail worse conv @.92", 12, cell(tail, "conv", 0.92, "windows_tail_worse"), 0),
+    ("VI oracle-work p99 code @.85", 1.42, cell(tail, "code", 0.85, "oracle_work_p99_s") / cell(tail, "code", 0.85, "fcfs_p99_s"), 0.02),
+    ("VI SJF-Pred worse windows code @.92", 8, cell(predtest, "code", 0.92, "windows_pred_worse"), 0),
+    ("VI SJF-Pred p code @.92", 0.06, cell(predtest, "code", 0.92, "wilcoxon_p_onesided"), 0.005),
+    ("VI SJF-Pred p code @.98", 0.03, cell(predtest, "code", 0.98, "wilcoxon_p_onesided"), 0.005),
+    ("VI predictor p code @.98", 0.009, cell(contrib, "code", 0.98, "wilcoxon_p_onesided"), 0.001),
+    ("VI predictor p conv @.98", 0.027, cell(contrib, "conv", 0.98, "wilcoxon_p_onesided"), 0.001),
+    ("VI SLO conv @.92", 34.5, 100 * t2("conv", "cb_sjf_work", "slo_both_attain"), 0.1),
+    ("VI SLO code @.92", 15.4, 100 * t2("code", "cb_sjf_work", "slo_both_attain"), 0.1),
+    ("VI SLO conv @.60", 54.3, 100 * t2("conv", "cb_sjf_work", "slo_both_attain", 0.60), 0.1),
+    ("VI SLO conv @.98", 31.1, 100 * t2("conv", "cb_sjf_work", "slo_both_attain", 0.98), 0.1),
+    ("VI SLO code @.60", 34.5, 100 * t2("code", "cb_sjf_work", "slo_both_attain", 0.60), 0.1),
+    ("VI SLO code @.98", 13.4, 100 * t2("code", "cb_sjf_work", "slo_both_attain", 0.98), 0.1),
+
+    ("VII sens base conv", 46.0, float(gen[(gen.workload == "conv") & (gen.gen_scale == 1.0)].improvement_pct.iloc[0]), 0.1),
+    ("VII engine-time 16x conv", 11.2, float(gen[(gen.workload == "conv") & (gen.gen_scale == 16.0)].prefill_time_share_pct.iloc[0]), 0.1),
+    ("VII improvement 16x conv", 75.1, float(gen[(gen.workload == "conv") & (gen.gen_scale == 16.0)].improvement_pct.iloc[0]), 0.1),
+    ("VII cb/oracle 1x conv", 1.08, float(gen[(gen.workload == "conv") & (gen.gen_scale == 1.0)].cb_over_oracle_ratio.iloc[0]), 0.01),
+    ("VII cb/oracle 16x conv", 3.76, float(gen[(gen.workload == "conv") & (gen.gen_scale == 16.0)].cb_over_oracle_ratio.iloc[0]), 0.01),
+    ("VII cb/oracle 16x code", 5.53, float(gen[(gen.workload == "code") & (gen.gen_scale == 16.0)].cb_over_oracle_ratio.iloc[0]), 0.01),
+    ("VII predictor 16x conv", 21.1, float(gen[(gen.workload == "conv") & (gen.gen_scale == 16.0)].predictor_gain_pct.iloc[0]), 0.1),
+    ("VII cache90 conv", 12.8, float(cache[(cache.workload == "conv") & (cache.cache_hit == 0.9)].improvement_pct.iloc[0]), 0.1),
+    ("VII cache90 code", 14.8, float(cache[(cache.workload == "code") & (cache.cache_hit == 0.9)].improvement_pct.iloc[0]), 0.1),
+    ("VII cache90 gap conv", 85.5, float(cache[(cache.workload == "conv") & (cache.cache_hit == 0.9)].oracle_gap_recovered_pct.iloc[0]), 0.1),
+    ("VII cache90 gap code", 74.5, float(cache[(cache.workload == "code") & (cache.cache_hit == 0.9)].oracle_gap_recovered_pct.iloc[0]), 0.1),
+]
+
+
+def main() -> int:
+    bad = []
+    for label, printed, computed, tol in CHECKS:
+        ok = abs(float(printed) - float(computed)) <= tol
+        if not ok:
+            bad.append((label, printed, computed, tol))
+        print(f"{'ok  ' if ok else 'FAIL'} {label:<38} paper={printed:<10} results={float(computed):.4f}")
+
+    print(f"\n{len(CHECKS) - len(bad)}/{len(CHECKS)} checks passed")
+    if bad:
+        print("\nMISMATCHES:")
+        for label, printed, computed, tol in bad:
+            print(f"  {label}: paper says {printed}, results give {float(computed):.4f} (tol {tol})")
+    return 1 if bad else 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

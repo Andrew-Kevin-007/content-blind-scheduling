@@ -140,6 +140,36 @@ def tail_analysis(df: pd.DataFrame) -> pd.DataFrame:
     return pd.DataFrame(recs)
 
 
+def sjf_pred_vs_fcfs(df: pd.DataFrame) -> pd.DataFrame:
+    """Test the claim that ordering by predicted output length is worse than FCFS.
+
+    This appears in the abstract and the conclusion, so it needs the same test we
+    apply to results that favour us. Asserting it untested while demanding
+    p<0.01 of the predictor's gain would be a double standard.
+    """
+    recs = []
+    for (wl, load), cell in df.groupby(["workload", "target_load"]):
+        piv = cell.pivot_table(
+            index="window", columns="policy", values=PRIMARY
+        ).sort_index()
+        if BASELINE not in piv or "predicted_sjf" not in piv:
+            continue
+        base, pred = piv[BASELINE].values, piv["predicted_sjf"].values
+        rec = {
+            "workload": wl, "target_load": load, "n_windows": len(piv),
+            "fcfs_mean": float(base.mean()), "sjf_pred_mean": float(pred.mean()),
+            "windows_pred_worse": int((pred > base).sum()),
+        }
+        try:
+            rec["wilcoxon_p_onesided"] = float(
+                stats.wilcoxon(pred, base, alternative="greater").pvalue
+            )
+        except ValueError:
+            rec["wilcoxon_p_onesided"] = float("nan")
+        recs.append(rec)
+    return pd.DataFrame(recs)
+
+
 def predictor_contribution(df: pd.DataFrame) -> pd.DataFrame:
     """Does the learned predictor earn its place, or is context length enough?
 
@@ -197,8 +227,45 @@ def main() -> int:
     tails = tail_analysis(df)
     tails.to_csv(RESULTS / "tail_analysis.csv", index=False)
 
+    # Normalised latency divides by output tokens, so one-token requests
+    # contribute their full latency and can dominate the mean. Quantify that,
+    # and re-test the headline on requests generating at least 8 tokens, where
+    # the metric is not degenerate.
+    rob = []
+    for (wl, load), cell in df.groupby(["workload", "target_load"]):
+        pa = cell.pivot_table(index="window", columns="policy", values=PRIMARY)
+        pl = cell.pivot_table(
+            index="window", columns="policy", values="norm_latency_mean_gen_ge8"
+        )
+        if BASELINE not in pa or PROPOSED not in pa:
+            continue
+        base_f = cell[cell.policy == BASELINE]
+        rob.append({
+            "workload": wl, "target_load": load,
+            "frac_requests_gen_le4": float(base_f.frac_requests_gen_le4.mean()),
+            "frac_normlat_from_gen_le4": float(base_f.frac_normlat_from_gen_le4.mean()),
+            "improvement_all_pct":
+                100.0 * (pa[BASELINE] - pa[PROPOSED]).mean() / pa[BASELINE].mean(),
+            "improvement_gen_ge8_pct":
+                100.0 * (pl[BASELINE] - pl[PROPOSED]).mean() / pl[BASELINE].mean(),
+            "windows_improved_gen_ge8": int((pl[PROPOSED] < pl[BASELINE]).sum()),
+            "n_windows": int(len(pl)),
+        })
+    robust = pd.DataFrame(rob)
+    robust.to_csv(RESULTS / "metric_robustness.csv", index=False)
+
     contrib = predictor_contribution(df)
     contrib.to_csv(RESULTS / "predictor_contribution.csv", index=False)
+
+    predtest = sjf_pred_vs_fcfs(df)
+    predtest.to_csv(RESULTS / "sjf_pred_vs_fcfs.csv", index=False)
+
+    # SLO attainment across loads, so the paper quotes measured values rather
+    # than any that survive from an earlier revision.
+    slo_by_load = df[df.policy == PROPOSED].pivot_table(
+        index="target_load", columns="workload", values="slo_both_attain"
+    )
+    slo_by_load.to_csv(RESULTS / "slo_by_load.csv")
 
     # Measured engine-time split: where the replica actually spends wall clock,
     # including the per-iteration base cost that the marginal work model omits.
@@ -264,6 +331,13 @@ def main() -> int:
             "measured_utilisation_060": float(
                 df[(df.workload == wl) & (df.policy == BASELINE)
                    & (df.target_load == 0.60)].utilisation.mean()
+            ),
+            "frac_normlat_from_gen_le4": float(
+                robust[robust.workload == wl].frac_normlat_from_gen_le4.mean()
+            ),
+            "improvement_gen_ge8_high_load": float(
+                robust[(robust.workload == wl)
+                       & (robust.target_load >= 0.85)].improvement_gen_ge8_pct.mean()
             ),
             "oracle_gap_recovered_pct_high_load": float(
                 hi.oracle_gap_recovered_pct.mean()
