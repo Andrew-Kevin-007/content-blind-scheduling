@@ -1,0 +1,16 @@
+{
+  "conv": {
+    "ctx_tokens": 44548646118.0,
+    "out_tokens": 2880822750.0,
+    "token_ratio": 15.463862231024105,
+    "assumed_cost_ratio": 1.4999999999999998,
+    "breakeven_cost_ratio": 15.463862231024105
+  },
+  "code": {
+    "ctx_tokens": 42198710773.0,
+    "out_tokens": 381271302.0,
+    "token_ratio": 110.67895892411016,
+    "assumed_cost_ratio": 1.4999999999999998,
+    "breakeven_cost_ratio": 110.67895892411016
+  }
+}

@@ -66,6 +66,11 @@ def paired_tests(df: pd.DataFrame) -> pd.DataFrame:
             continue
 
         base, prop = piv[BASELINE].values, piv[PROPOSED].values
+        # Report BOTH definitions. The ratio of means is dominated by whichever
+        # window has the worst FCFS run; the mean of per-window ratios is what
+        # the paired test actually operates on. Quoting only the first would
+        # overstate the effect.
+        per_window = 100.0 * (base - prop) / base
         rec = {
             "workload": wl,
             "target_load": load,
@@ -73,6 +78,10 @@ def paired_tests(df: pd.DataFrame) -> pd.DataFrame:
             "fcfs_mean": base.mean(),
             "proposed_mean": prop.mean(),
             "improvement_pct": 100.0 * (base - prop).mean() / base.mean(),
+            "improvement_pct_perwindow_mean": float(per_window.mean()),
+            "improvement_pct_perwindow_min": float(per_window.min()),
+            "improvement_pct_perwindow_max": float(per_window.max()),
+            "windows_improved": int((per_window > 0).sum()),
         }
 
         try:
@@ -99,6 +108,69 @@ def paired_tests(df: pd.DataFrame) -> pd.DataFrame:
     return pd.DataFrame(recs)
 
 
+def tail_analysis(df: pd.DataFrame) -> pd.DataFrame:
+    """Where the proposed policy LOSES.
+
+    Shortest-first ordering minimises the mean by deferring long requests, which
+    necessarily lengthens the tail. This function measures that cost per cell so
+    it appears in the paper instead of being discovered by a reviewer reading
+    Table II.
+    """
+    recs = []
+    for (wl, load), cell in df.groupby(["workload", "target_load"]):
+        piv = cell.pivot_table(index="window", columns="policy", values="latency_p99")
+        if BASELINE not in piv or PROPOSED not in piv:
+            continue
+        base, prop = piv[BASELINE].values, piv[PROPOSED].values
+        ratio = prop / base
+        rec = {
+            "workload": wl,
+            "target_load": load,
+            "n_windows": len(piv),
+            "fcfs_p99_s": base.mean() / 1000.0,
+            "proposed_p99_s": prop.mean() / 1000.0,
+            "p99_ratio_mean": float(ratio.mean()),
+            "p99_ratio_max": float(ratio.max()),
+            "windows_tail_worse": int((prop > base).sum()),
+        }
+        for pol in ("oracle_sjf", "oracle_work", "sjf_context"):
+            if pol in piv:
+                rec[f"{pol}_p99_s"] = piv[pol].values.mean() / 1000.0
+        recs.append(rec)
+    return pd.DataFrame(recs)
+
+
+def predictor_contribution(df: pd.DataFrame) -> pd.DataFrame:
+    """Does the learned predictor earn its place, or is context length enough?
+
+    Compares the proposed policy against SJF-Ctx, which is the same policy with
+    the predicted-decode term removed. If this is zero the paper should say so.
+    """
+    recs = []
+    for (wl, load), cell in df.groupby(["workload", "target_load"]):
+        piv = cell.pivot_table(
+            index="window", columns="policy", values=PRIMARY
+        ).sort_index()
+        if "sjf_context" not in piv or PROPOSED not in piv:
+            continue
+        ctx, prop = piv["sjf_context"].values, piv[PROPOSED].values
+        gain = 100.0 * (ctx - prop) / ctx
+        rec = {
+            "workload": wl, "target_load": load, "n_windows": len(piv),
+            "sjf_ctx_mean": ctx.mean(), "proposed_mean": prop.mean(),
+            "predictor_gain_pct": float(gain.mean()),
+            "windows_predictor_helps": int((gain > 0).sum()),
+        }
+        try:
+            rec["wilcoxon_p_onesided"] = float(
+                stats.wilcoxon(ctx, prop, alternative="greater").pvalue
+            )
+        except ValueError:
+            rec["wilcoxon_p_onesided"] = float("nan")
+        recs.append(rec)
+    return pd.DataFrame(recs)
+
+
 def slo_table(df: pd.DataFrame) -> pd.DataFrame:
     piv = df.pivot_table(
         index=["workload", "target_load"],
@@ -121,6 +193,19 @@ def main() -> int:
 
     slo = slo_table(df)
     slo.to_csv(RESULTS / "slo.csv", index=False)
+
+    tails = tail_analysis(df)
+    tails.to_csv(RESULTS / "tail_analysis.csv", index=False)
+
+    contrib = predictor_contribution(df)
+    contrib.to_csv(RESULTS / "predictor_contribution.csv", index=False)
+
+    # Measured engine-time split: where the replica actually spends wall clock,
+    # including the per-iteration base cost that the marginal work model omits.
+    time_split = df[df.policy == BASELINE].pivot_table(
+        index="target_load", columns="workload", values="prefill_time_share"
+    )
+    time_split.to_csv(RESULTS / "prefill_time_share.csv")
 
     pred = pd.DataFrame(json.loads((RESULTS / "raw" / "predictor_eval.json").read_text()))
     pred_summ = pred.groupby("workload")[
@@ -154,9 +239,32 @@ def main() -> int:
     for wl in df.workload.unique():
         sub = tests[tests.workload == wl]
         hi = sub[sub.target_load >= 0.85]
+        t_hi = tails[(tails.workload == wl) & (tails.target_load >= 0.85)]
+        c_hi = contrib[(contrib.workload == wl) & (contrib.target_load >= 0.85)]
         head[wl] = {
             "improvement_pct_high_load_mean": float(hi.improvement_pct.mean()),
             "improvement_pct_max": float(sub.improvement_pct.max()),
+            "improvement_perwindow_mean_high_load": float(
+                hi.improvement_pct_perwindow_mean.mean()
+            ),
+            "improvement_perwindow_min_high_load": float(
+                hi.improvement_pct_perwindow_min.min()
+            ),
+            "improvement_perwindow_max_high_load": float(
+                hi.improvement_pct_perwindow_max.max()
+            ),
+            "p99_ratio_vs_fcfs_high_load": float(t_hi.p99_ratio_mean.mean()),
+            "windows_tail_worse_high_load": int(t_hi.windows_tail_worse.sum()),
+            "windows_total_high_load": int(t_hi.n_windows.sum()),
+            "predictor_gain_pct_high_load": float(c_hi.predictor_gain_pct.mean()),
+            "measured_prefill_time_share_092": float(
+                df[(df.workload == wl) & (df.policy == BASELINE)
+                   & (df.target_load == 0.92)].prefill_time_share.mean()
+            ),
+            "measured_utilisation_060": float(
+                df[(df.workload == wl) & (df.policy == BASELINE)
+                   & (df.target_load == 0.60)].utilisation.mean()
+            ),
             "oracle_gap_recovered_pct_high_load": float(
                 hi.oracle_gap_recovered_pct.mean()
             ),
@@ -171,9 +279,17 @@ def main() -> int:
 
     print("\n=== paired tests (primary metric: mean normalised latency) ===")
     print(tests.to_string(index=False, float_format=lambda v: f"{v:.4g}"))
+    print("\n=== TAIL COST (where the proposed policy loses) ===")
+    print(tails.to_string(index=False, float_format=lambda v: f"{v:.4g}"))
+    print("\n=== predictor contribution over SJF-Ctx ===")
+    print(contrib.to_string(index=False, float_format=lambda v: f"{v:.4g}"))
+    print("\n=== measured prefill share of ENGINE TIME (fcfs) ===")
+    print(time_split.round(3).to_string())
     print("\n=== headline ===")
     print(json.dumps(head, indent=2))
-    print("\nwrote summary.csv, paired_tests.csv, slo.csv, predictor_summary.csv, headline.json")
+    print("\nwrote summary.csv, paired_tests.csv, tail_analysis.csv, "
+          "predictor_contribution.csv, prefill_time_share.csv, slo.csv, "
+          "predictor_summary.csv, work_share.json, headline.json")
     return 0
 
 

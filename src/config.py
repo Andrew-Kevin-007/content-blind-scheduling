@@ -27,8 +27,15 @@ TRACES = {
 # full week: a week of arrivals is far more than is needed for stable tail
 # statistics, and short windows let us report variability across windows instead
 # of a single unrepeatable number.
+# Evaluation windows are sampled at even intervals across the whole week rather
+# than drawn from the busiest periods. Because arrivals are rescaled to a target
+# load (see rescale_arrivals), a window's absolute arrival rate does not affect
+# the experiment at all; window choice determines only the REQUEST MIX. Sampling
+# across the week therefore costs nothing and removes any suspicion that the
+# result depends on peak-hour traffic.
 WINDOW_MINUTES = 20
-N_WINDOWS = 5           # one per seed; disjoint, drawn from busy periods
+N_WINDOWS = 24
+MIN_WINDOW_SEPARATION_MINUTES = 120   # no two windows adjacent or near-adjacent
 WARMUP_FRACTION = 0.1   # leading fraction discarded before measuring
 
 # ----------------------------------------------------------- serving model ---

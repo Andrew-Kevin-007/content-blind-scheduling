@@ -1,12 +1,19 @@
-"""Robustness of the central claim to the analytical cost model.
+"""Robustness of the central claim.
 
-The paper's mechanism is that prefill dominates schedulable work. That claim
-rests on the ratio between the per-token prefill cost and the marginal
-per-token decode cost, which we model rather than measure. This sweep varies
-that ratio over a 16x range and asks whether the conclusion survives.
+An earlier version of this sweep varied the marginal decode COST. That was the
+wrong knob: the binding constraint in the simulator is KV-cache capacity, whose
+per-request footprint is x_i + y_i, and scaling a cost coefficient leaves that
+untouched. The result was invariant for an uninteresting reason.
 
-If the conclusion only holds at our chosen coefficients, we need to know it, and
-say so, rather than presenting a single operating point as general.
+This version scales OUTPUT LENGTH instead. That moves the decode share of work
+and the KV footprint together, and it is the direction that matters practically:
+reasoning and agentic workloads generate far more tokens per request than the
+2024 traces do. If the conclusion survives here, it survives for a reason.
+
+We additionally sweep the fraction of prefill that is actually executed, which
+models automatic prefix caching. Multi-turn conversation re-sends its history,
+so production stacks serve much of the prompt from cache; that shrinks exactly
+the component this paper relies on being large.
 """
 
 from __future__ import annotations
@@ -21,101 +28,145 @@ import pandas as pd
 
 import predictor as P
 import simulator as S
-from config import N_WINDOWS, PERF, REQUESTS_PER_RUN, RESULTS, TRACES
+from config import PERF, REQUESTS_PER_RUN, RESULTS, TRACES
 from data import load_trace, pick_windows, window_frame
-from run import TRAIN_HOURS, TRAIN_SAMPLE
+from run import TRAIN_HOURS, TRAIN_SAMPLE, estimated_work
 
-# Multipliers on the marginal decode cost. Raising it makes the *unobservable*
-# component of service time more important, which is the adversarial direction
-# for our claim.
-DECODE_SCALES = [0.5, 1.0, 2.0, 4.0, 8.0]
+GEN_SCALES = [1.0, 2.0, 4.0, 8.0, 16.0]
+CACHE_HIT = [0.0, 0.5, 0.75, 0.9]     # fraction of prompt served from cache
 LOAD = 0.92
-POLICIES = ["fcfs", "cb_sjf_work", "oracle_work"]
+POLICIES = ["fcfs", "sjf_context", "cb_sjf_work", "oracle_work"]
+MAX_WINDOWS = 8
 
 
-def perf_for(scale: float) -> dict:
-    p = dict(PERF)
-    p["decode_ms_per_request"] = PERF["decode_ms_per_request"] * scale
-    return p
+def key_for(policy, t_ms, ctx_seen, gen, pred):
+    """Ordering key. ctx_seen is what the scheduler observes.
 
-
-def key_for(policy, t_ms, ctx, gen, pred, perf):
+    Under prefix caching the scheduler still sees the FULL context length: the
+    cache-hit length depends on token identity, so computing it would require
+    reading content. This is modelled by passing the uncached ctx here while the
+    engine executes the reduced one.
+    """
     if policy == "fcfs":
         return t_ms
-    y = pred if policy == "cb_sjf_work" else gen.astype("float64")
-    return (
-        perf["prefill_fixed_ms"]
-        + perf["prefill_ms_per_token"] * ctx.astype("float64")
-        + perf["decode_ms_per_request"] * y
-    )
+    if policy == "sjf_context":
+        return ctx_seen.astype("float64")
+    if policy == "cb_sjf_work":
+        return estimated_work(ctx_seen.astype("float64"), pred)
+    if policy == "oracle_work":
+        return estimated_work(ctx_seen.astype("float64"), gen.astype("float64"))
+    raise ValueError(policy)
 
 
 def one(args):
-    wl, widx, scale, policy, t_ms, ctx, gen, pred, base_cap = args
-    perf = perf_for(scale)
-    # Capacity must be re-measured: changing the cost model changes throughput.
-    cap = S.measure_capacity(ctx, gen, perf=perf)
+    wl, widx, gen_scale, hit, policy, t_ms, ctx, gen, pred = args
+    gen_s = np.maximum(1, np.round(gen * gen_scale)).astype("int64")
+    ctx_exec = np.maximum(1, np.round(ctx * (1.0 - hit))).astype("int64")
+
+    # Clamp the sequence length so no request exceeds the KV budget on its own.
+    # Real engines impose exactly such a bound; without it, scaling output length
+    # produces requests that can never be admitted, and the run would report
+    # metrics over requests that never finished.
+    kv_cap = S.kv_capacity_tokens()
+    budget = int(kv_cap * 0.95)
+    over = (ctx_exec + gen_s) > budget
+    if over.any():
+        gen_s = np.where(over, np.maximum(1, budget - ctx_exec), gen_s)
+    gen_s = gen_s.astype("int32")
+    ctx_exec = ctx_exec.astype("int32")
+
+    cap = S.measure_capacity(ctx_exec, gen_s)
     t = S.rescale_arrivals(t_ms, cap, LOAD)
-    prio = key_for(policy, t, ctx, gen, pred, perf)
-    rec, meta = S.simulate(t, ctx, gen, prio, perf=perf)
+    prio = key_for(policy, t, ctx, gen_s, pred * gen_scale)
+    rec, meta = S.simulate(t, ctx_exec, gen_s, prio)
     m = S.metrics(rec, meta)
-    pre = perf["prefill_ms_per_token"] * ctx.astype("float64").sum()
-    dec = perf["decode_ms_per_request"] * gen.astype("float64").sum()
+
+    pre = PERF["prefill_ms_per_token"] * ctx_exec.astype("float64").sum()
+    dec = PERF["decode_ms_per_request"] * gen_s.astype("float64").sum()
     return {
-        "workload": wl, "window": widx, "decode_scale": scale, "policy": policy,
+        "workload": wl, "window": widx, "gen_scale": gen_scale, "cache_hit": hit,
+        "policy": policy, "clamped_frac": float(over.mean()),
         "prefill_share_pct": 100.0 * pre / (pre + dec),
-        "capacity_rps": cap, "norm_latency_mean": m["norm_latency_mean"],
-        "latency_p99": m["latency_p99"], "slo_both_attain": m["slo_both_attain"],
+        "prefill_time_share": m["prefill_time_share"],
+        "norm_latency_mean": m["norm_latency_mean"],
+        "latency_p99": m["latency_p99"], "capacity_rps": cap,
     }
 
 
-def main() -> int:
+def build_jobs():
     jobs = []
     for wl in TRACES:
         df = load_trace(wl)
-        tr = df[df.t_ms < TRAIN_HOURS * 3.6e6]
-        tr = tr.iloc[:: max(1, len(tr) // TRAIN_SAMPLE)].head(TRAIN_SAMPLE)
+        tr = df[df.t_ms < TRAIN_HOURS * 3.6e6].head(TRAIN_SAMPLE)
         model = P.train(tr)
-        for widx, s in enumerate(pick_windows(df)):
+        starts = [s for s in pick_windows(df) if s >= TRAIN_HOURS * 3.6e6]
+        for widx, s in enumerate(starts[:MAX_WINDOWS]):
             w = window_frame(df, s).head(REQUESTS_PER_RUN).reset_index(drop=True)
             ctx = w["ContextTokens"].values.copy()
             gen = w["GeneratedTokens"].values.copy()
             pred = P.predict(model, w).astype("float64")
             t_ms = w["t_ms"].values.astype("float64").copy()
-            for scale, pol in itertools.product(DECODE_SCALES, POLICIES):
-                jobs.append((wl, widx, scale, pol, t_ms, ctx, gen, pred, None))
+            for g, pol in itertools.product(GEN_SCALES, POLICIES):
+                jobs.append((wl, widx, g, 0.0, pol, t_ms, ctx, gen, pred))
+            for h, pol in itertools.product(CACHE_HIT[1:], POLICIES):
+                jobs.append((wl, widx, 1.0, h, pol, t_ms, ctx, gen, pred))
         del df, tr, model
+    return jobs
 
+
+def summarise(df, group_col):
+    out = []
+    for (wl, val), cell in df.groupby(["workload", group_col]):
+        piv = cell.pivot_table(index="window", columns="policy",
+                               values="norm_latency_mean")
+        if not {"fcfs", "cb_sjf_work", "oracle_work"} <= set(piv.columns):
+            continue
+        base, prop, orac = piv["fcfs"], piv["cb_sjf_work"], piv["oracle_work"]
+        denom = (base - orac).mean()
+        row = {
+            "workload": wl, group_col: val,
+            "clamped_frac": float(cell.clamped_frac.mean()),
+            "prefill_share_pct": cell.prefill_share_pct.mean(),
+            "prefill_time_share_pct": 100 * cell.prefill_time_share.mean(),
+            "improvement_pct": 100.0 * (base - prop).mean() / base.mean(),
+            "oracle_gap_recovered_pct": (
+                100.0 * (base - prop).mean() / denom if abs(denom) > 1e-12 else np.nan
+            ),
+            # How much worse than a perfectly-informed scheduler we are, in
+            # absolute terms. Unlike the recovered-gap percentage, this does not
+            # flatter us when FCFS also degrades.
+            "cb_over_oracle_ratio": float((prop / orac).mean()),
+        }
+        if "sjf_context" in piv:
+            row["predictor_gain_pct"] = float(
+                100.0 * (piv["sjf_context"] - prop).mean() / piv["sjf_context"].mean()
+            )
+        out.append(row)
+    return pd.DataFrame(out).sort_values(["workload", group_col])
+
+
+def main() -> int:
+    jobs = build_jobs()
     print(f"running {len(jobs)} sensitivity simulations")
     rows = []
     with ProcessPoolExecutor(max_workers=6) as ex:
         for k, r in enumerate(ex.map(one, jobs, chunksize=1), 1):
             rows.append(r)
-            if k % 30 == 0:
+            if k % 100 == 0:
                 print(f"  {k}/{len(jobs)}", flush=True)
 
     df = pd.DataFrame(rows)
     (RESULTS / "raw" / "sensitivity.json").write_text(df.to_json(orient="records"))
 
-    out = []
-    for (wl, sc), cell in df.groupby(["workload", "decode_scale"]):
-        piv = cell.pivot_table(index="window", columns="policy",
-                               values="norm_latency_mean")
-        base, prop, orac = piv["fcfs"], piv["cb_sjf_work"], piv["oracle_work"]
-        denom = (base - orac).mean()
-        out.append({
-            "workload": wl,
-            "decode_scale": sc,
-            "prefill_share_pct": cell.prefill_share_pct.mean(),
-            "improvement_pct": 100.0 * (base - prop).mean() / base.mean(),
-            "oracle_gap_recovered_pct": (
-                100.0 * (base - prop).mean() / denom if abs(denom) > 1e-12 else np.nan
-            ),
-        })
-    summ = pd.DataFrame(out).sort_values(["workload", "decode_scale"])
-    summ.to_csv(RESULTS / "sensitivity.csv", index=False)
-    print("\n=== sensitivity to decode cost ===")
-    print(summ.to_string(index=False, float_format=lambda v: f"{v:.4g}"))
+    gen = summarise(df[df.cache_hit == 0.0], "gen_scale")
+    gen.to_csv(RESULTS / "sensitivity_genlen.csv", index=False)
+    cache = summarise(df[df.gen_scale == 1.0], "cache_hit")
+    cache.to_csv(RESULTS / "sensitivity_cache.csv", index=False)
+
+    print("\n=== output-length scaling (reasoning/agentic direction) ===")
+    print(gen.to_string(index=False, float_format=lambda v: f"{v:.4g}"))
+    print("\n=== prefix-cache hit rate ===")
+    print(cache.to_string(index=False, float_format=lambda v: f"{v:.4g}"))
     return 0
 
 

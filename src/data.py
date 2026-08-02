@@ -14,7 +14,14 @@ import sys
 import numpy as np
 import pandas as pd
 
-from config import N_WINDOWS, PROC, TRACES, WINDOW_MINUTES
+from config import (
+    MIN_WINDOW_SEPARATION_MINUTES,
+    N_WINDOWS,
+    PROC,
+    REQUESTS_PER_RUN,
+    TRACES,
+    WINDOW_MINUTES,
+)
 
 USECOLS = ["TIMESTAMP", "ContextTokens", "GeneratedTokens"]
 
@@ -67,28 +74,45 @@ def load_trace(name: str, force: bool = False) -> pd.DataFrame:
     return df
 
 
-def pick_windows(df: pd.DataFrame, n: int = N_WINDOWS, minutes: int = WINDOW_MINUTES):
-    """Select the n busiest disjoint windows, deterministically.
+def pick_windows(
+    df: pd.DataFrame,
+    n: int = N_WINDOWS,
+    minutes: int = WINDOW_MINUTES,
+    min_sep_minutes: int = MIN_WINDOW_SEPARATION_MINUTES,
+):
+    """Sample n windows at even intervals across the whole trace.
 
-    Busy periods are the interesting ones: an idle window has no queueing, and a
-    scheduler that is never under contention is trivially indistinguishable from
-    any other. Ties break on earlier start time so the choice is reproducible.
+    An earlier version took the n busiest windows. That was unnecessary and
+    invited a cherry-picking objection: because arrivals are rescaled to a
+    target offered load before simulation, a window's absolute arrival rate is
+    normalised away entirely, and window choice affects only the request mix.
+    Even sampling covers diurnal and weekday/weekend variation instead.
+
+    Windows are required to be at least `min_sep_minutes` apart so that no two
+    are adjacent in time and each is a genuinely separate traffic epoch.
     """
     width_ms = minutes * 60_000.0
-    horizon = df["t_ms"].iloc[-1]
-    starts = np.arange(0, horizon - width_ms, width_ms)
-    counts = np.searchsorted(df["t_ms"].values, starts + width_ms) - np.searchsorted(
-        df["t_ms"].values, starts
-    )
+    sep_ms = max(min_sep_minutes * 60_000.0, width_ms)
+    horizon = float(df["t_ms"].iloc[-1])
 
-    order = np.lexsort((starts, -counts))  # busiest first, then earliest
+    # Evenly spaced anchors across the usable span, snapped to a deterministic
+    # grid so reruns are byte-identical.
+    usable = horizon - width_ms
+    anchors = np.linspace(0.0, usable, n)
+    grid = np.round(anchors / width_ms) * width_ms
+
+    t = df["t_ms"].values
     chosen: list[float] = []
-    for idx in order:
-        s = starts[idx]
-        if all(abs(s - c) >= width_ms for c in chosen):
-            chosen.append(s)
-        if len(chosen) == n:
-            break
+    for s in grid:
+        s = float(min(max(s, 0.0), usable))
+        if any(abs(s - c) < sep_ms for c in chosen):
+            continue
+        # Every run consumes REQUESTS_PER_RUN requests, so a window holding
+        # fewer would silently produce a shorter, non-comparable run.
+        cnt = np.searchsorted(t, s + width_ms) - np.searchsorted(t, s)
+        if cnt < REQUESTS_PER_RUN:
+            continue
+        chosen.append(s)
     return sorted(chosen)
 
 

@@ -1,4 +1,4 @@
-# Prefill Dominates: Content-Blind Work-Aware Scheduling for LLM Inference Serving
+# What Does Content-Blindness Cost? Scheduling LLM Inference Without Reading the Prompt
 
 Submission to **ICCCIoT-2026 / IC3IoT-2026**, Track 4 (Blockchain, Cloud
 Computing and Big Data Analytics). Paper: `paper/main.pdf` (6 pages, IEEE
@@ -6,12 +6,24 @@ conference format, anonymized for double-blind review).
 
 ## Claim
 
-In Microsoft Azure's production LLM inference traces, **prefill accounts for
-91.2%–98.7% of schedulable work**, and prefill cost is exactly observable at
-admission from the context length. A scheduler that never reads prompt content
-therefore recovers **78.5%–92.5%** of the improvement attainable by an oracle
-with perfect knowledge of output length, and **outperforms** a scheduler driven
-by an explicit learned length predictor.
+In Microsoft Azure's production LLM inference traces, prefill is the larger part
+of service work (**91.2%/98.7%** of attributable marginal work, **76%/92%** of
+measured engine time at high load) and is exactly observable at admission from
+the context length. A scheduler that never reads prompt content therefore
+recovers **90.3%** (conversation) and **79.3%** (code) of the improvement
+attainable by an output-length oracle, over 20 and 11 windows sampled across a
+full production week.
+
+Two findings qualify it, and both are in the paper rather than buried:
+
+- **The gain is paid for in the tail.** 99th-percentile latency degrades by up
+  to 1.9x (conversation) and 3.1x (code). An oracle scheduler pays the same
+  price, so this is a property of shortest-first admission, not of
+  content-blindness.
+- **The learned predictor earns almost nothing** (0.1%/1.3% over ordering by raw
+  context length) and is statistically indistinguishable from zero in all but
+  one cell. Ordering by predicted output length *alone* is worse than FCFS on
+  the code workload.
 
 ## Reproducing
 

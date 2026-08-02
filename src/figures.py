@@ -151,7 +151,7 @@ def fig_predictability():
 
 def fig_main(runs: pd.DataFrame):
     """Headline: normalised latency vs offered load, per workload."""
-    fig, axes = plt.subplots(1, 2, figsize=(COL2, 2.5), sharex=True)
+    fig, axes = plt.subplots(1, 2, figsize=(COL2, 2.05), sharex=True)
     for ax, wl in zip(axes, ("conv", "code")):
         for pol in ORDER:
             sub = runs[(runs.workload == wl) & (runs.policy == pol)]
@@ -170,8 +170,8 @@ def fig_main(runs: pd.DataFrame):
         _grid(ax)
     axes[0].set_ylabel("Mean normalised latency\n(ms per output token)")
     handles, labels = axes[0].get_legend_handles_labels()
-    fig.legend(handles, labels, loc="lower center", bbox_to_anchor=(0.5, -0.16),
-               ncol=3, frameon=False)
+    fig.legend(handles, labels, loc="lower center", bbox_to_anchor=(0.5, -0.13),
+               ncol=6, frameon=False, columnspacing=1.0, handlelength=1.8)
     out = FIGURES / "fig3_main.pdf"
     fig.savefig(out)
     plt.close(fig)
@@ -187,19 +187,26 @@ def fig_oracle_gap(tests: pd.DataFrame):
         (("conv", "#0072B2", ""), ("code", "#E69F00", "///"))
     ):
         sub = tests[tests.workload == wl].sort_values("target_load")
-        vals = [
-            float(sub[sub.target_load == L].oracle_gap_recovered_pct.iloc[0])
-            if not sub[sub.target_load == L].empty else np.nan
-            for L in TARGET_LOADS
-        ]
+        vals, imps = [], []
+        for L in TARGET_LOADS:
+            row = sub[sub.target_load == L]
+            vals.append(float(row.oracle_gap_recovered_pct.iloc[0]) if not row.empty else np.nan)
+            imps.append(float(row.improvement_pct.iloc[0]) if not row.empty else np.nan)
+        # A recovered-gap percentage is a ratio of two quantities that both go to
+        # zero at low load, so it reads as a large bar where nothing is actually
+        # happening. Annotating each bar with the absolute improvement it
+        # corresponds to prevents that misreading.
         ax.bar(x + (i - 0.5) * width, vals, width, color=colour, hatch=hatch,
                edgecolor="white", linewidth=0.7, label=WORKLOAD_TITLE[wl])
+        for xi, v, im in zip(x + (i - 0.5) * width, vals, imps):
+            ax.text(xi, v + 2, f"{im:.0f}", ha="center", va="bottom",
+                    fontsize=5.5, color="#333333", rotation=90)
     ax.axhline(100, color="#444444", linewidth=0.8, linestyle=":")
-    ax.text(len(x) - 0.5, 102, "oracle", fontsize=6, ha="right", color="#444444")
+    ax.text(-0.45, 101.5, "oracle", fontsize=6, ha="left", color="#444444")
     ax.set_xticks(x, [f"{L:.2f}" for L in TARGET_LOADS])
     ax.set_xlabel(r"Offered load $\rho$")
     ax.set_ylabel("Oracle gap recovered (%)")
-    ax.set_ylim(0, 118)
+    ax.set_ylim(0, 132)
     # Every bar sits between 75% and 98%, so there is no clear interior space;
     # the legend goes above the axes rather than on top of the data.
     ax.legend(loc="lower center", bbox_to_anchor=(0.5, 1.02), ncol=2, frameon=False)

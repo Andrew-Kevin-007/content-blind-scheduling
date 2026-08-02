@@ -106,6 +106,19 @@ def simulate(t_ms, ctx, gen, priority, perf=PERF, model=MODEL):
     kv_cap = kv_capacity_tokens(model)
     max_batch = perf["max_batch_size"]
 
+    # A request whose own footprint exceeds the whole KV budget can never be
+    # admitted. Head-of-line admission would then block forever and the run
+    # would silently report metrics over unfinished requests. Real engines
+    # bound the sequence length instead; refuse to simulate rather than emit a
+    # meaningless number.
+    footprint = np.asarray(ctx, dtype="int64") + np.asarray(gen, dtype="int64")
+    if footprint.max() > kv_cap:
+        raise ValueError(
+            f"{int((footprint > kv_cap).sum())} of {n} requests exceed the KV "
+            f"budget ({int(footprint.max())} > {kv_cap} tokens); clamp sequence "
+            "length before simulating"
+        )
+
     reqs = [
         Request(i, float(t_ms[i]), int(ctx[i]), int(gen[i]), float(priority[i]))
         for i in range(n)
@@ -118,6 +131,16 @@ def simulate(t_ms, ctx, gen, priority, perf=PERF, model=MODEL):
     kv_used = 0
     done = 0
     busy_ms = 0.0
+    # Engine-time accounting. The per-request work model in service_work_ms()
+    # charges decode only its marginal cost; these counters instead record where
+    # the engine actually spends wall-clock, including the per-iteration base
+    # cost. The two accountings differ and the paper reports both.
+    prefill_ms = 0.0
+    decode_ms = 0.0
+    batch_sum = 0
+    n_decode_iters = 0
+    queue_depth_sum = 0
+    n_samples = 0
 
     while done < n:
         # Admit everything that has arrived by `now`.
@@ -157,6 +180,7 @@ def simulate(t_ms, ctx, gen, priority, perf=PERF, model=MODEL):
             )
             now += cost
             busy_ms += cost
+            prefill_ms += cost
             for r in newly:
                 r.admitted = now
                 r.first_token = now
@@ -185,6 +209,9 @@ def simulate(t_ms, ctx, gen, priority, perf=PERF, model=MODEL):
         cost = perf["decode_ms_base"] + perf["decode_ms_per_request"] * len(running)
         now += cost
         busy_ms += cost
+        decode_ms += cost
+        batch_sum += len(running)
+        n_decode_iters += 1
         still = []
         for r in running:
             r.produced += 1
@@ -195,11 +222,18 @@ def simulate(t_ms, ctx, gen, priority, perf=PERF, model=MODEL):
             else:
                 still.append(r)
         running = still
+        queue_depth_sum += len(pending)
+        n_samples += 1
 
-    return _collect(reqs, now, busy_ms)
+    return _collect(
+        reqs, now, busy_ms,
+        prefill_ms=prefill_ms, decode_ms=decode_ms,
+        mean_batch=batch_sum / max(n_decode_iters, 1),
+        mean_queue_depth=queue_depth_sum / max(n_samples, 1),
+    )
 
 
-def _collect(reqs, wall_ms, busy_ms):
+def _collect(reqs, wall_ms, busy_ms, **extra):
     n = len(reqs)
     out = np.zeros(
         n,
@@ -219,7 +253,11 @@ def _collect(reqs, wall_ms, busy_ms):
             r.ctx,
             r.gen,
         )
-    return out, dict(wall_ms=wall_ms, busy_ms=busy_ms, utilisation=busy_ms / wall_ms)
+    meta = dict(wall_ms=wall_ms, busy_ms=busy_ms, utilisation=busy_ms / wall_ms)
+    meta.update(extra)
+    if busy_ms > 0:
+        meta["prefill_time_share"] = extra.get("prefill_ms", 0.0) / busy_ms
+    return out, meta
 
 
 def metrics(rec, meta, warmup=WARMUP_FRACTION):
@@ -229,6 +267,9 @@ def metrics(rec, meta, warmup=WARMUP_FRACTION):
     return {
         "n": int(len(r)),
         "utilisation": float(meta["utilisation"]),
+        "prefill_time_share": float(meta.get("prefill_time_share", float("nan"))),
+        "mean_batch": float(meta.get("mean_batch", float("nan"))),
+        "mean_queue_depth": float(meta.get("mean_queue_depth", float("nan"))),
         "throughput_rps": float(len(r) / (meta["wall_ms"] / 1000.0)),
         "ttft_p50": float(np.percentile(r["ttft"], 50)),
         "ttft_p95": float(np.percentile(r["ttft"], 95)),

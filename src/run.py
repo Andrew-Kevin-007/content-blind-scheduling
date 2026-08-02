@@ -118,15 +118,27 @@ def prepare(workload: str):
     """Load trace, train the predictor on early history, cut evaluation windows."""
     df = load_trace(workload)
     train_cut = TRAIN_HOURS * 3.6e6
-    train = df[df.t_ms < train_cut]
-    if len(train) > TRAIN_SAMPLE:
-        train = train.iloc[:: len(train) // TRAIN_SAMPLE].head(TRAIN_SAMPLE)
-    print(f"  {workload}: training on {len(train):,} requests from first {TRAIN_HOURS}h")
+    # Contiguous prefix, NOT a strided subsample. Striding would stretch
+    # inter-arrival times and widen the rolling windows at training time only,
+    # so five of the ten features would be on a different scale at training than
+    # at serving. A deployed model sees contiguous traffic; so does this one.
+    train = df[df.t_ms < train_cut].head(TRAIN_SAMPLE)
+    print(f"  {workload}: training on {len(train):,} contiguous requests "
+          f"from the first {TRAIN_HOURS}h")
 
     model = P.train(train)
 
-    starts = pick_windows(df)
-    assert min(starts) >= train_cut, "evaluation window overlaps training period"
+    # Windows are now sampled across the whole week, so some fall inside the
+    # predictor's training period. Drop those: evaluating on data the model was
+    # fitted on would inflate the predictor's apparent quality.
+    all_starts = pick_windows(df)
+    starts = [s for s in all_starts if s >= train_cut]
+    dropped = len(all_starts) - len(starts)
+    print(
+        f"  {workload}: {len(starts)} evaluation windows "
+        f"({dropped} dropped for overlapping the training period)"
+    )
+    assert starts, "no evaluation windows survive the train/eval split"
 
     windows, evals = [], []
     for i, s in enumerate(starts):
@@ -136,12 +148,16 @@ def prepare(workload: str):
         gen = w["GeneratedTokens"].values.copy()
         cap = S.measure_capacity(ctx, gen)
         print(f"    window {i}: measured capacity {cap:.2f} req/s", flush=True)
+        t_ms = w["t_ms"].values.astype("float64").copy()
         windows.append(
-            dict(t_ms=w["t_ms"].values.astype("float64").copy(), ctx=ctx, gen=gen,
-                 pred=pred.astype("float64"), cap=cap)
+            dict(t_ms=t_ms, ctx=ctx, gen=gen, pred=pred.astype("float64"), cap=cap)
         )
         evals.append(
             {"workload": workload, "window": i, "capacity_rps": cap,
+             # Disclosed so the paper can state exactly which slice of the week
+             # each window covers, and how much real time 20k requests spans.
+             "window_start_hours": float(s / 3.6e6),
+             "span_used_minutes": float(t_ms[-1] / 60_000.0),
              **P.evaluate(model, w)}
         )
 
@@ -167,7 +183,7 @@ def main() -> int:
         all_evals.extend(evals)
         importances[workload] = imp
         for widx, load, policy in itertools.product(
-            range(N_WINDOWS), TARGET_LOADS, POLICIES
+            range(len(windows)), TARGET_LOADS, POLICIES
         ):
             d = windows[widx]
             jobs.append(
