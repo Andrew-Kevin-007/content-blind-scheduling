@@ -1,0 +1,32 @@
+# Environment
+.venv/
+__pycache__/
+*.py[cod]
+.ipynb_checkpoints/
+
+# Data — raw and processed are reproducible from src/data.py + SOURCES.md.
+# Checksums ARE committed (results/checksums.txt) so integrity is verifiable.
+data/raw/
+data/processed/
+
+# LaTeX build artifacts
+*.aux
+*.log
+*.out
+*.bbl
+*.blg
+*.synctex.gz
+*.fls
+*.fdb_latexmk
+*.toc
+*.lof
+*.lot
+*.spl
+
+# OS
+Thumbs.db
+desktop.ini
+.DS_Store
+
+# NOTE: results/ IS committed on purpose — it is the paper's evidence base.
+# NOTE: figures/ IS committed on purpose — needed to build the paper.
