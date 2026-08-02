@@ -1,0 +1,26 @@
+{
+  "conv": {
+    "context_tokens": 0.2937989166741651,
+    "log_context_tokens": 0.0,
+    "workload_is_code": 0.0,
+    "hour_of_day": 0.001030663191562775,
+    "day_of_week": 0.0,
+    "recent_mean_output": -8.348511516320656e-06,
+    "recent_p90_output": 0.00027086906192881345,
+    "recent_mean_context": -2.954958418281972e-05,
+    "inter_arrival_ms": -0.0013682667735968935,
+    "recent_arrival_rate": 7.082792848223107e-06
+  },
+  "code": {
+    "context_tokens": 0.007846311475758894,
+    "log_context_tokens": 0.0,
+    "workload_is_code": 0.0,
+    "hour_of_day": 0.001802561775490208,
+    "day_of_week": 0.0,
+    "recent_mean_output": 0.0008618874798247856,
+    "recent_p90_output": 0.0002866314278564097,
+    "recent_mean_context": -2.979632962385459e-05,
+    "inter_arrival_ms": -0.00533855469000617,
+    "recent_arrival_rate": 1.0518401709092018e-05
+  }
+}

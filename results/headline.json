@@ -1,0 +1,28 @@
+{
+  "conv": {
+    "improvement_pct_high_load_mean": 52.90121155442338,
+    "improvement_pct_max": 72.97795543252305,
+    "oracle_gap_recovered_pct_high_load": 92.53194483780686,
+    "predictor_spearman": 0.38425326460187953,
+    "predictor_pairwise_acc": 0.6399628980741443,
+    "capacity_rps": 1.8687376196596681,
+    "prefill_pct": 91.15767400387897,
+    "decode_pct": 8.842325996121021,
+    "n_requests": 27303999,
+    "mean_context_tokens": 1631.579539612494,
+    "mean_output_tokens": 105.5091875003365
+  },
+  "code": {
+    "improvement_pct_high_load_mean": 48.52071498687036,
+    "improvement_pct_max": 66.61362509955877,
+    "oracle_gap_recovered_pct_high_load": 78.5049476676164,
+    "predictor_spearman": 0.07292781134425719,
+    "predictor_pairwise_acc": 0.5253516553130358,
+    "capacity_rps": 1.304159983227038,
+    "prefill_pct": 98.66285084619588,
+    "decode_pct": 1.3371491538041107,
+    "n_requests": 16803695,
+    "mean_context_tokens": 2511.27569103105,
+    "mean_output_tokens": 22.689729967129253
+  }
+}

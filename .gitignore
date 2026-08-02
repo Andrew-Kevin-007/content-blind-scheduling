@@ -4,10 +4,10 @@ __pycache__/
 *.py[cod]
 .ipynb_checkpoints/
 
-# Data — raw and processed are reproducible from src/data.py + SOURCES.md.
-# Checksums ARE committed (results/checksums.txt) so integrity is verifiable.
-data/raw/
-data/processed/
+# Data — every byte is re-downloadable via src/fetch_data.py, and SHA-256
+# checksums ARE committed (results/checksums.txt) so integrity is verifiable
+# without shipping 4.6 GB through git.
+data/
 
 # LaTeX build artifacts
 *.aux
@@ -30,3 +30,7 @@ desktop.ini
 
 # NOTE: results/ IS committed on purpose — it is the paper's evidence base.
 # NOTE: figures/ IS committed on purpose — needed to build the paper.
+
+# Inspection renders (regenerate with pdftoppm)
+paper/pg-*.png
+figures/*.png

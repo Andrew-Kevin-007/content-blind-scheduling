@@ -1,0 +1,126 @@
+% ============================================================================
+% CITATION INTEGRITY
+% Every entry below was checked against a primary source (USENIX / NeurIPS /
+% ACM / IEEE proceedings page, or the official artifact repository) before
+% being added. Entries marked [V] were verified by direct lookup during
+% drafting on 2026-08-02.
+%
+% RULES:
+%   1. Every entry must correspond to a source verified to exist.
+%   2. Never invent a DOI, volume, page range or author list to "complete" an
+%      entry. If a field is unverified, leave it out.
+%   3. An entry you cannot verify is not a citation -- it is a "citation
+%      needed" flag. Note it in the manuscript instead of adding it here.
+% ============================================================================
+
+@inproceedings{kwon2023pagedattention,
+  author    = {Kwon, Woosuk and Li, Zhuohan and Zhuang, Siyuan and Sheng, Ying
+               and Zheng, Lianmin and Yu, Cody Hao and Gonzalez, Joseph E. and
+               Zhang, Hao and Stoica, Ion},
+  title     = {Efficient Memory Management for Large Language Model Serving with
+               {PagedAttention}},
+  booktitle = {Proc. 29th ACM Symposium on Operating Systems Principles (SOSP)},
+  year      = {2023}
+}
+
+@inproceedings{yu2022orca,
+  author    = {Yu, Gyeong-In and Jeong, Joo Seong and Kim, Geon-Woo and
+               Kim, Soojeong and Chun, Byung-Gon},
+  title     = {{Orca}: A Distributed Serving System for Transformer-Based
+               Generative Models},
+  booktitle = {Proc. 16th USENIX Symposium on Operating Systems Design and
+               Implementation (OSDI)},
+  year      = {2022}
+}
+
+% [V] ISCA 2024, DOI 10.1109/ISCA59077.2024.00019
+@inproceedings{patel2024splitwise,
+  author    = {Patel, Pratyush and Choukse, Esha and Zhang, Chaojie and
+               Shah, Aashaka and Goiri, {\'I}{\~n}igo and Maleki, Saeed and
+               Bianchini, Ricardo},
+  title     = {{Splitwise}: Efficient Generative {LLM} Inference Using Phase
+               Splitting},
+  booktitle = {Proc. 51st Annual International Symposium on Computer
+               Architecture (ISCA)},
+  year      = {2024}
+}
+
+% [V] OSDI 2024
+@inproceedings{zhong2024distserve,
+  author    = {Zhong, Yinmin and Liu, Shengyu and Chen, Junda and Hu, Jianbo and
+               Zhu, Yibo and Liu, Xuanzhe and Jin, Xin and Zhang, Hao},
+  title     = {{DistServe}: Disaggregating Prefill and Decoding for
+               Goodput-optimized Large Language Model Serving},
+  booktitle = {Proc. 18th USENIX Symposium on Operating Systems Design and
+               Implementation (OSDI)},
+  year      = {2024}
+}
+
+% [V] OSDI 2024
+@inproceedings{agrawal2024sarathi,
+  author    = {Agrawal, Amey and Kedia, Nitin and Panwar, Ashish and
+               Mohan, Jayashree and Kwatra, Nipun and Gulavani, Bhargav S. and
+               Tumanov, Alexey and Ramjee, Ramachandran},
+  title     = {Taming Throughput-Latency Tradeoff in {LLM} Inference with
+               {Sarathi-Serve}},
+  booktitle = {Proc. 18th USENIX Symposium on Operating Systems Design and
+               Implementation (OSDI)},
+  year      = {2024}
+}
+
+% [V] NeurIPS 2024. Predicts output-length RANK from the prompt text.
+@inproceedings{fu2024ltr,
+  author    = {Fu, Yichao and Zhu, Siqi and Su, Runlong and Qiao, Aurick and
+               Stoica, Ion and Zhang, Hao},
+  title     = {Efficient {LLM} Scheduling by Learning to Rank},
+  booktitle = {Advances in Neural Information Processing Systems (NeurIPS)},
+  year      = {2024}
+}
+
+% [V] NeurIPS 2023. Fine-tunes DistilBERT on the prompt to predict length.
+@inproceedings{jin2023s3,
+  author    = {Jin, Yunho and Wu, Chun-Feng and Brooks, David and Wei, Gu-Yeon},
+  title     = {{$S^3$}: Increasing {GPU} Utilization during Generative Inference
+               for Higher Throughput},
+  booktitle = {Advances in Neural Information Processing Systems (NeurIPS)},
+  year      = {2023}
+}
+
+% [V] HPCA 2025
+@inproceedings{stojkovic2025dynamollm,
+  author    = {Stojkovic, Jovan and Zhang, Chaojie and Goiri, {\'I}{\~n}igo and
+               Torrellas, Josep and Choukse, Esha},
+  title     = {{DynamoLLM}: Designing {LLM} Inference Clusters for Performance
+               and Energy Efficiency},
+  booktitle = {Proc. IEEE International Symposium on High Performance Computer
+               Architecture (HPCA)},
+  year      = {2025}
+}
+
+@inproceedings{cortez2017resource,
+  author    = {Cortez, Eli and Bonde, Anand and Muzio, Alexandre and
+               Russinovich, Mark and Fontoura, Marcus and Bianchini, Ricardo},
+  title     = {Resource Central: Understanding and Predicting Workloads for
+               Improved Resource Management in Large Cloud Platforms},
+  booktitle = {Proc. 26th ACM Symposium on Operating Systems Principles (SOSP)},
+  year      = {2017}
+}
+
+@inproceedings{shahrad2020serverless,
+  author    = {Shahrad, Mohammad and Fonseca, Rodrigo and Goiri, {\'I}{\~n}igo
+               and Chaudhry, Gohar and Batum, Paul and Cooke, Jason and
+               Laureano, Eduardo and Tresness, Colby and Russinovich, Mark and
+               Bianchini, Ricardo},
+  title     = {Serverless in the Wild: Characterizing and Optimizing the
+               Serverless Workload at a Large Cloud Provider},
+  booktitle = {Proc. USENIX Annual Technical Conference (ATC)},
+  year      = {2020}
+}
+
+@misc{azurepublicdataset,
+  author       = {{Microsoft Azure}},
+  title        = {{AzurePublicDataset}: {Azure} {LLM} Inference Trace 2024},
+  howpublished = {\url{https://github.com/Azure/AzurePublicDataset}},
+  note         = {Accessed 2026-08-02},
+  year         = {2024}
+}
