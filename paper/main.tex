@@ -103,10 +103,10 @@ resident request, and a request holds its slot and its share of the key-value
 (KV) cache until it produces its final token.
 
 This creates a scheduling problem with an unusual information structure. How
-long a request holds its slot is proportional to its output length, and that
-length is unknown when the request arrives. Under first-come-first-serve (FCFS),
-the default in production engines, one long-generating request admitted early
-blocks many short ones behind it, producing head-of-line blocking and long tails.
+long a request holds its slot is proportional to its output length, which is
+unknown when the request arrives. Under first-come-first-serve (FCFS), the
+default in production engines, one long-generating request admitted early blocks
+many short ones behind it, producing head-of-line blocking and long tails.
 
 The established response is to predict output length and approximate
 shortest-job-first (SJF). $S^3$ fine-tunes a DistilBERT model on the prompt to
@@ -249,20 +249,17 @@ than the more favourable one. Under either, prefill is at least half of the
 work and the component hidden from the scheduler is the smaller one.
 
 \subsection{Output length is not equally predictable}
-The unobservable component is also unequally guessable. Binning each trace by
-context-length decile, mean output length rises roughly ninefold across the
-deciles of the conversation trace, so context length carries real information
-about output length there. For code completion the relationship is flat and
-output length is negligibly correlated with input length. A content-blind
-predictor (Section~\ref{sec:method}) attains a rank correlation of $\rho_s =
-0.365$ with true output length on conversation but only $0.107$ on code, with
-pairwise ordering accuracies of 0.633 and 0.537 against a chance level of 0.5.
+The unobservable component is also unequally guessable. Binning by context-length
+decile, mean output length rises roughly ninefold across the conversation
+deciles, while for code the relationship is flat and output length is negligibly
+correlated with input length. A content-blind predictor
+(Section~\ref{sec:method}) attains a rank correlation of $\rho_s = 0.365$ with
+true output length on conversation but only $0.107$ on code, with pairwise
+ordering accuracies of 0.633 and 0.537 against a chance level of 0.5.
 
-The two workloads therefore have opposite risk profiles. The code trace has both
-the heavier output-length tail and the weaker predictive signal: it is the
-workload that would benefit most from length-aware scheduling and the one where
-predicting length is hardest. A method that depends on accurate length
-prediction is weakest exactly where it is most needed.
+The two workloads therefore have opposite risk profiles: code has both the
+heavier output-length tail and the weaker predictive signal, so a method
+depending on accurate length prediction is weakest where it is most needed.
 
 % ============================================================================
 \section{Content-Blind Work-Aware Scheduling}
@@ -292,10 +289,10 @@ degrades gracefully: when $\hat{y}_i$ is uninformative, the ranking is still
 governed by the exactly-known prefill term.
 
 CB-SJF-Work is not offered as a novel mechanism. Scheduling on input length is
-established practice~\cite{wu2026fastserve,pecsched}, and its learned term earns
+established practice~\cite{wu2026fastserve,pecsched} and its learned term earns
 almost nothing (Section~\ref{sec:results}). It is the natural content-blind
-policy, used here as an instrument: placed between FCFS and an output-length
-oracle, it measures what the information constraint costs.
+policy, used here as an instrument: placed between FCFS and an oracle, it
+measures what the information constraint costs.
 
 We obtain $\hat{y}_i$ from a gradient-boosted regression tree trained on
 $\log(1+y)$ over ten content-blind features: context length and its logarithm,
@@ -374,28 +371,28 @@ does not bias the comparison: throughput agrees across policies to within
 \textbf{Windows.} We evaluate the first 20{,}000 requests of each of 20
 (conversation) and 11 (code) windows sampled at even intervals across the full
 week, each at least two hours from the next and after the predictor's training
-period. Twenty thousand requests span 3.7 to 19.9 minutes of arrivals depending
-on the window, so a window is a few minutes of traffic rather than a 20-minute
-period. We apply no busyness ranking, because rescaling to a target $\rho$
-normalises a window's absolute arrival rate away entirely and window choice
-affects only the request mix. We do, however, require each window to contain at
-least 20{,}000 requests so that every run has the same length, and this is
-implicitly a traffic threshold: it excludes no conversation candidates but 10 of
-24 code candidates, which are the quietest periods of that trace. Replaying the
-same windows under every policy makes all comparisons paired. The leading 10\%
-of each run is discarded as warm-up.
+period. Twenty thousand requests span 3.7 to 19.9 minutes of arrivals, so a
+window is a few minutes of traffic rather than a 20-minute period. We apply no
+busyness ranking, because rescaling to a target $\rho$ normalises a window's
+arrival rate away and window choice affects only the request mix. We do require
+each window to hold at least 20{,}000 requests so every run has the same length,
+which is implicitly a traffic threshold: it excludes no conversation candidates
+but 10 of 24 code candidates, the quietest periods of that trace. Replaying the
+same windows under every policy makes all comparisons paired; the leading 10\%
+of each run is warm-up.
 
-\textbf{Policies.} We compare FCFS (the engine default); SJF-Ctx, which orders
-by context length alone; SJF-Pred, which orders by predicted output length (the
-objective of prior work, realised content-blind); our CB-SJF-Work; and two
-oracles: Oracle-SJF, ordering by true output length, and Oracle-Work,
-ordering by true total work. The oracles require information unavailable
-at admission and are upper bounds, not deployable systems.
+\textbf{Policies.} We compare FCFS (the engine default); SJF-Ctx, ordering by
+context length alone; SJF-Pred, ordering by predicted output length; our
+CB-SJF-Work; two controls, LJF-Work (the CB-SJF-Work key negated) and Random,
+which isolate ordering direction from the information used; and two oracles,
+Oracle-SJF and Oracle-Work, ordering by true output length and true total work.
+The oracles need information unavailable at admission and are upper bounds, not
+deployable systems.
 
 \textbf{Metrics.} Mean normalised latency $\bar{L}_n$ (end-to-end latency per
-output token, the standard continuous-batching metric), 99th-percentile
-end-to-end latency, and SLO attainment, defined as the fraction of requests
-meeting both a 2\,s time-to-first-token and a 100\,ms time-between-tokens target.
+output token), 99th-percentile end-to-end latency, and SLO attainment, the
+fraction of requests meeting both a 2\,s time-to-first-token and a 100\,ms
+time-between-tokens target.
 
 % ============================================================================
 \section{Results}
@@ -414,7 +411,7 @@ point the policies separate.
 
 \begin{figure*}[!t]
   \centering
-  \includegraphics[width=0.80\textwidth]{../figures/fig3_main.pdf}
+  \includegraphics[width=0.72\textwidth]{../figures/fig3_main.pdf}
   \caption{Mean normalised latency against offered load, over 20 (conversation)
   and 11 (code) windows sampled across a full production week (error bars:
   s.d.). Below $\rho\approx0.75$ the queue is shallow and all policies nearly
@@ -445,13 +442,12 @@ A third concern deserves a direct test. Normalised latency divides by output
 tokens, so for a one-token request it degenerates to raw latency, and short
 requests could dominate the mean in a way that rewards shortest-first ordering
 by construction. They do carry it disproportionately: at $\rho=0.92$ requests
-emitting at most four tokens are 10.9\% (conversation) and 36.5\% (code) of
-arrivals but 50.2\% and 78.6\% of total normalised latency. Restricted to
-requests emitting at least eight tokens, the improvement at $\rho \ge 0.85$ is
-47.04\% and 48.5\% against 51.5\% and 58.8\%, positive in all 31 windows. The
-inflation grows as load falls: at $\rho=0.75$ the restricted improvement on code
-is 11.1\% against 22.9\%. The headline is inflated by short requests but not an
-artifact of them.
+emitting at most four tokens are 10.9\% and 36.5\% of arrivals but 50.2\% and
+78.6\% of total normalised latency. Restricted to requests emitting at least
+eight tokens, the improvement at $\rho \ge 0.85$ is 47.04\% and 48.5\% against
+51.5\% and 58.8\%, positive in all 31 windows, though the inflation grows as
+load falls: at $\rho=0.75$ the restricted improvement on code is 11.1\% against
+22.9\%. The headline is inflated by short requests but not an artifact of them.
 
 \subsection{The mean-latency gain is paid for in the tail}
 Shortest-first ordering reduces the mean by deferring long requests, so it must
@@ -469,23 +465,31 @@ This cost is not attributable to content-blindness. Oracle-Work incurs it
 equally, with $P_{99}$ ratios against FCFS of 1.42$\times$, 1.95$\times$ and
 3.30$\times$ on code at the three highest loads, slightly worse than ours, and
 Oracle-SJF is worse still (1261\,s against our 556\,s at $\rho=0.92$). Perfect
-knowledge of output length makes the tail worse, not better. This isolates the
-information constraint rather than the ordering discipline: both policies order
-by estimated work, and separating them would need a non-shortest-first control
-we do not have. An operator who cares primarily about the tail should not deploy
-these policies without an anti-starvation mechanism; preemptive
-schedulers~\cite{wu2026fastserve,pecsched} address exactly this.
+knowledge of output length makes the tail worse, not better.
+
+Nor is it a property of shortest-first ordering, as we first assumed. Two
+controls separate ordering direction from information: LJF-Work negates the
+CB-SJF-Work key, so it is content-blind in the same way but longest-first, and
+Random orders by an uninformative key. Their $P_{99}$ ratios against FCFS at
+$\rho=0.92$ are 9.00$\times$ and 3.81$\times$ (conversation) and 9.68$\times$
+and 5.31$\times$ (code), against 0.99$\times$ and 2.05$\times$ for CB-SJF-Work.
+Random reordering, which is not shortest-first at all, damages the tail more
+than we do. The penalty is therefore the price of departing from arrival order
+at all: FCFS's strong tail comes from its freedom from starvation rather than
+from anything it knows, and among reorderings shortest-first is the least
+harmful. Longest-first is also 5.3$\times$ worse on the mean (2688 against 506).
+An operator who cares primarily about the tail should not reorder without an
+anti-starvation mechanism~\cite{wu2026fastserve,pecsched}.
 
 \subsection{The learned predictor earns almost nothing}
 CB-SJF-Work differs from SJF-Ctx only by the $c_d \hat{y}_i$ term. Its
 contribution ranges from $-0.11\%$ to $+0.39\%$ on conversation and $-0.06\%$ to
-$+3.45\%$ on code across the load sweep, and is negative in 5 of the 10 cells.
-It reaches significance at $p<0.05$ only at the highest load, on both workloads
-(code $p=0.009$, positive in 9 of 11 windows; conversation $p=0.027$, positive
-in 13 of 20). At $\rho=0.92$ the two policies differ by 506 against 505
-(conversation) and 6327 against 6337 (code). Ordering by raw context length is,
-for practical purposes, as good as ordering by a learned estimate of total work,
-and we would not recommend deploying the predictor for this purpose.
+$+3.45\%$ on code, is negative in 5 of the 10 cells, and reaches $p<0.05$ only
+at the highest load on either workload (code $p=0.009$, 9 of 11 windows;
+conversation $p=0.027$, 13 of 20). At $\rho=0.92$ the two differ by 506 against
+505 and 6327 against 6337. Ordering by raw context length is, for practical
+purposes, as good as ordering by a learned estimate of total work, and we would
+not recommend deploying the predictor for this purpose.
 
 Ordering by predicted output length alone is worse on code, and we state the
 strength of that evidence precisely because it favours us. SJF-Pred attains
@@ -505,12 +509,12 @@ ours cannot see.
 CB-SJF-Work roughly doubles SLO attainment over FCFS, 34.5\% against 18.8\%
 (conversation) and 15.4\% against 8.6\% (code), matching Oracle-Work to within
 0.1 points; SJF-Ctx matches both, so here too the gain comes from ordering by
-context length. Attainment falls steeply with load, from 54.3\% to 31.1\% (conversation) and
-34.5\% to 13.4\% (code), so contention accounts for much of it. It is not the
-whole story: even at our lowest load 46\% and 66\% of requests miss the target,
-because one unchunked prefill step for a multi-thousand-token prompt consumes
-much of the 2\,s time-to-first-token budget before any queueing. The comparison
-between policies stands; the absolute level is not a claim about production.
+context length. Attainment falls steeply with load, from 54.3\% to 31.1\% and 34.5\% to 13.4\%,
+so contention accounts for much of it. It is not the whole story: even at our
+lowest load 46\% and 66\% of requests miss the target, because one unchunked
+prefill step for a multi-thousand-token prompt consumes much of the 2\,s
+time-to-first-token budget before any queueing. The policy comparison stands;
+the absolute level is not a claim about production.
 
 % ============================================================================
 \section{Limitations and Threats to Validity}
@@ -534,16 +538,16 @@ untouched and is uninformative.
 
 \textbf{Longer generations, including reasoning and agentic workloads.} Scaling
 output length up to 16$\times$ drives the prefill share of engine time from
-75.4\% to 11.2\% on conversation and from 92.9\% to 48.8\% on code. The
-improvement over FCFS does not collapse, but the workloads move in opposite
-directions: on conversation it rises from 46.0\% to 75.1\%, while on code it
-declines from 63.3\% to 50.5\%. In neither case does ordering by observable work
-stop being a good ordering, even where that work becomes a minority of engine
-time. What degrades in both is the price of content-blindness: CB-SJF-Work runs
-1.08$\times$ the mean normalised latency of Oracle-Work at $1\times$ but
-3.76$\times$ at $16\times$ (conversation) and 5.53$\times$ (code), and the
-learned predictor, worth 0.3\% today, becomes worth 21.1\%. Our conclusions
-would need revisiting for long-generation workloads.
+75.4\% to 11.2\% (conversation) and 92.9\% to 48.8\% (code). The improvement
+over FCFS does not collapse, but the workloads move in opposite directions: it
+rises from 46.0\% to 75.1\% on conversation and declines from 63.3\% to 50.5\%
+on code. In neither case does ordering by observable work stop being a good
+ordering, even where that work becomes a minority of engine time. What degrades
+in both is the price of content-blindness: CB-SJF-Work runs 1.08$\times$ the
+mean normalised latency of Oracle-Work at $1\times$ but 3.76$\times$ and
+5.53$\times$ at $16\times$, and the learned predictor, worth 0.3\% today,
+becomes worth 21.1\%. Our conclusions would need revisiting for long-generation
+workloads.
 
 \textbf{Prefix caching.} This is the most serious threat and the traces cannot
 answer it: production stacks serve repeated prefixes from cache, multi-turn
@@ -551,12 +555,14 @@ conversation has the highest hit rates, and the traces record context length but
 not cache residency. Reducing executed prefill to model a hit rate, while the
 scheduler still observes the full context length (cache-hit length depends on
 token identity and so is not content-blind), the improvement over FCFS falls to
-12.8\% (conversation) and 14.8\% (code) at a 90\% hit rate. The recovered oracle gap stays high, 85.5\% and 74.5\%,
-but that is not evidence that caching penalises all schedulers equally: our
-oracle is denied cache residency too, so both policies order by the same
-inflated prefill estimate and converge for that reason. A cache-aware oracle
-would widen the gap by an amount we have not measured. Prefix-cache-aware
-content-blind scheduling is the main open problem this work exposes.
+12.8\% (conversation) and 14.8\% (code) at a 90\% hit rate; on code the decline
+is a cliff rather than a slope, 48.6\% at a 75\% hit rate. Measured against an
+oracle that is itself denied cache residency the recovered gap appears to hold
+up, at 85.5\% and 74.5\%, but that comparison flatters us: both policies then
+order by the same inflated prefill estimate and converge for that reason.
+Against a cache-aware oracle, which sees the executed prefill, the recovered gap
+falls to 66.0\% and 69.8\%. Prefix-cache-aware content-blind scheduling is the
+main open problem this work exposes.
 
 \textbf{Non-preemptive admission.} Our scheduler controls admission order only:
 no preemption, swapping or aging. This isolates the effect of admission
@@ -597,10 +603,9 @@ would shrink the benefit for every policy studied here.
 
 The practical implication is narrow but useful: on workloads resembling these, a
 scheduler that never sees prompt content gives up little, and ordering by
-context length alone captures nearly all of it.
-The natural next steps are to combine content-blind ordering with preemption or
-aging, which our tail results show is needed, and to extend it to
-prefix-cache-aware serving.
+context length alone captures nearly all of it. The natural next steps are to
+combine content-blind ordering with preemption or aging, which our tail results
+show is needed, and to extend it to prefix-cache-aware serving.
 
 \bibliographystyle{IEEEtran}
 \bibliography{refs}

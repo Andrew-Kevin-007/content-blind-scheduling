@@ -141,6 +141,18 @@ CHECKS = [
     ("VII engine-time 16x code", 48.8, float(gen[(gen.workload == "code") & (gen.gen_scale == 16.0)].prefill_time_share_pct.iloc[0]), 0.1),
     ("VII improvement 16x code", 50.5, float(gen[(gen.workload == "code") & (gen.gen_scale == 16.0)].improvement_pct.iloc[0]), 0.1),
     ("VII predictor gain 1x conv", 0.3, float(gen[(gen.workload == "conv") & (gen.gen_scale == 1.0)].predictor_gain_pct.iloc[0]), 0.05),
+
+    # Ordering-direction controls (LJF-Work, Random) and the cache-aware oracle.
+    ("VI LJF p99 ratio conv", 9.00, t2("conv", "ljf_work", "latency_p99") / t2("conv", "fcfs", "latency_p99"), 0.02),
+    ("VI LJF p99 ratio code", 9.68, t2("code", "ljf_work", "latency_p99") / t2("code", "fcfs", "latency_p99"), 0.02),
+    ("VI Rand p99 ratio conv", 3.81, t2("conv", "rand", "latency_p99") / t2("conv", "fcfs", "latency_p99"), 0.02),
+    ("VI Rand p99 ratio code", 5.31, t2("code", "rand", "latency_p99") / t2("code", "fcfs", "latency_p99"), 0.02),
+    ("VI CB p99 ratio conv", 0.99, t2("conv", "cb_sjf_work", "latency_p99") / t2("conv", "fcfs", "latency_p99"), 0.02),
+    ("VI LJF mean conv", 2688, t2("conv", "ljf_work", "norm_latency_mean"), 2.0),
+    ("VI LJF vs CB mean ratio", 5.3, t2("conv", "ljf_work", "norm_latency_mean") / t2("conv", "cb_sjf_work", "norm_latency_mean"), 0.05),
+    ("VII cache90 cacheaware gap conv", 66.0, float(cache[(cache.workload == "conv") & (cache.cache_hit == 0.9)].oracle_gap_recovered_cacheaware_pct.iloc[0]), 0.1),
+    ("VII cache90 cacheaware gap code", 69.8, float(cache[(cache.workload == "code") & (cache.cache_hit == 0.9)].oracle_gap_recovered_cacheaware_pct.iloc[0]), 0.1),
+    ("VII cache75 code", 48.6, float(cache[(cache.workload == "code") & (cache.cache_hit == 0.75)].improvement_pct.iloc[0]), 0.1),
 ]
 
 
@@ -234,7 +246,7 @@ def completeness() -> list[str]:
         "27.3", "27", "16.8", "0.60", "0.75", "0.85", "0.92", "0.98", "2.0",
         "100", "0.5", "8", "16", "12", "31", "33", "1.0", "0.05", "0.01",
         "99", "4.0", "87",
-        "0.80",   # \includegraphics width, a layout constant
+        "0.72",   # \includegraphics width, a layout constant
     }
     return sorted(printed - covered - known)
 

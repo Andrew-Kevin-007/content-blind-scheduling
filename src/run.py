@@ -41,6 +41,8 @@ POLICIES = [
     "sjf_context",
     "predicted_sjf",
     "cb_sjf_work",
+    "ljf_work",
+    "rand",
     "oracle_sjf",
     "oracle_work",
 ]
@@ -50,6 +52,13 @@ POLICY_LABEL = {
     "sjf_context": "SJF-Ctx (prefill proxy)",
     "predicted_sjf": "SJF-Pred (predicted output length)",
     "cb_sjf_work": "CB-SJF-Work (proposed)",
+    # Controls that isolate the ORDERING DIRECTION from the information used.
+    # LJF-Work uses exactly the same content-blind key as CB-SJF-Work, negated,
+    # so any difference between them is attributable to shortest-first versus
+    # longest-first and not to what the scheduler can observe. Random orders by
+    # a key carrying no information at all.
+    "ljf_work": "LJF-Work (longest-first control)",
+    "rand": "Random (uninformative control)",
     "oracle_sjf": "Oracle-SJF (true output length)",
     "oracle_work": "Oracle-Work (true total work)",
 }
@@ -83,6 +92,13 @@ def priority_from_arrays(policy, t_ms, ctx, gen, pred):
         return pred
     if policy == "cb_sjf_work":
         return estimated_work(ctx.astype("float64"), pred)
+    if policy == "ljf_work":
+        # Identical key to CB-SJF-Work, negated. Same information, opposite
+        # direction, so it isolates the ordering discipline.
+        return -estimated_work(ctx.astype("float64"), pred)
+    if policy == "rand":
+        # Deterministic per (window, request) so reruns are byte-identical.
+        return np.random.default_rng(0).permutation(len(ctx)).astype("float64")
     if policy == "oracle_sjf":
         return gen.astype("float64")
     if policy == "oracle_work":
