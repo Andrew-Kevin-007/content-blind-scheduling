@@ -79,8 +79,7 @@ to FCFS, recovering 90.3\% and 79.3\% of the improvement attainable by an
 output-length oracle. Two findings qualify this. The benefit is not free:
 shortest-first ordering defers long requests, and 99th-percentile latency
 degrades by 1.9$\times$ and 3.1$\times$ on average at the highest load, and by
-up to 4.6$\times$ and 6.1$\times$ in the worst window, a cost an oracle
-scheduler incurs equally. And a learned content-blind length predictor
+up to 4.6$\times$ and 6.1$\times$ in the worst window, a cost an oracle scheduler also incurs. And a learned content-blind length predictor
 contributes almost nothing over ordering by raw context length, reaching
 significance only at the highest load. For these workloads the information a
 scheduler is denied is largely the information it least needs.
@@ -151,9 +150,9 @@ We make the following contributions.
       ordering by predicted output length alone is worse than FCFS on the code
       workload. Under a content-blindness constraint, the effort of learning to
       predict output length is not repaid.
-\item An accounting of the cost side. Every work-aware or length-aware policy,
-      including both oracles, degrades tail latency relative to FCFS. We report
-      the magnitude rather than the mean-latency gain alone.
+\item An accounting of the cost side. Reordering admissions degrades tail
+      latency, and controls show this to be the price of departing from arrival
+      order rather than of shortest-first ordering or of content-blindness.
 \end{enumerate}
 
 % ============================================================================
@@ -365,8 +364,8 @@ maximum concurrency where the per-iteration base cost amortises over a full
 batch, whereas the runs operate at smaller batches, so measured utilisation
 exceeds $\rho$ substantially: 0.91 (conversation) and 0.71 (code) at
 $\rho=0.60$. Read $\rho$ as a control variable, not as utilisation. Second, this
-does not bias the comparison: throughput agrees across policies to within
-0.06\% at every load.
+does not bias the comparison: throughput agrees across all eight policies to
+within 0.07\% at every load.
 
 \textbf{Windows.} We evaluate the first 20{,}000 requests of each of 20
 (conversation) and 11 (code) windows sampled at even intervals across the full
@@ -445,7 +444,7 @@ by construction. They do carry it disproportionately: at $\rho=0.92$ requests
 emitting at most four tokens are 10.9\% and 36.5\% of arrivals but 50.2\% and
 78.6\% of total normalised latency. Restricted to requests emitting at least
 eight tokens, the improvement at $\rho \ge 0.85$ is 47.04\% and 48.5\% against
-51.5\% and 58.8\%, positive in all 31 windows, though the inflation grows as
+51.5\% and 58.8\%, positive in all 20 and 11 windows, though the inflation grows as
 load falls: at $\rho=0.75$ the restricted improvement on code is 11.1\% against
 22.9\%. The headline is inflated by short requests but not an artifact of them.
 
@@ -453,33 +452,38 @@ load falls: at $\rho=0.75$ the restricted improvement on code is 11.1\% against
 Shortest-first ordering reduces the mean by deferring long requests, so it must
 lengthen the tail. We report that cost rather than leave it to be inferred from
 Table~\ref{tab:main}. On code, CB-SJF-Work has a worse 99th-percentile latency
-than FCFS in 31 of 33 window-load cells at $\rho \ge 0.85$, by a mean factor of
-2.05$\times$ and by up to 6.06$\times$ in the worst single window. On
+than FCFS in 31 of 33 window-load cells at $\rho \ge 0.85$, by a factor of
+2.05$\times$ averaged over those three loads and by up to 6.06$\times$ in the
+worst single window. On
 conversation the tail is essentially unchanged up to $\rho=0.92$ (mean
 0.98$\times$ and 1.00$\times$, though still worse than FCFS in 12 of 20 windows
 at $\rho=0.92$) and degrades to a mean of 1.86$\times$ at $\rho=0.98$, worse in
 all 20 windows, with a worst case of 4.57$\times$. Means understate this cost
 considerably and we give both.
 
-This cost is not attributable to content-blindness. Oracle-Work incurs it
-equally, with $P_{99}$ ratios against FCFS of 1.42$\times$, 1.95$\times$ and
-3.30$\times$ on code at the three highest loads, slightly worse than ours, and
-Oracle-SJF is worse still (1261\,s against our 556\,s at $\rho=0.92$). Perfect
-knowledge of output length makes the tail worse, not better.
+This cost is not attributable to content-blindness. All ratios below, and in
+Table~\ref{tab:recovery}, are means of per-window ratios. An oracle with perfect
+output-length knowledge still degrades the tail, by 1.31$\times$, 1.65$\times$
+and 2.78$\times$ on code at the three highest loads: marginally less than our
+1.33$\times$, 1.70$\times$ and 3.12$\times$, but nowhere near eliminating the
+penalty. Oracle-SJF, ordering purely by true output length, is far worse
+(1261\,s against our 556\,s at $\rho=0.92$).
 
 Nor is it a property of shortest-first ordering, as we first assumed. Two
 controls separate ordering direction from information: LJF-Work negates the
 CB-SJF-Work key, so it is content-blind in the same way but longest-first, and
-Random orders by an uninformative key. Their $P_{99}$ ratios against FCFS at
-$\rho=0.92$ are 9.00$\times$ and 3.81$\times$ (conversation) and 9.68$\times$
-and 5.31$\times$ (code), against 0.99$\times$ and 2.05$\times$ for CB-SJF-Work.
+Random orders by an uninformative key. At $\rho=0.92$ their $P_{99}$ ratios
+against FCFS are 7.51$\times$ and 3.25$\times$ (conversation) and 8.82$\times$
+and 4.23$\times$ (code), against 1.00$\times$ and 1.70$\times$ for CB-SJF-Work.
 Random reordering, which is not shortest-first at all, damages the tail more
-than we do. The penalty is therefore the price of departing from arrival order
-at all: FCFS's strong tail comes from its freedom from starvation rather than
-from anything it knows, and among reorderings shortest-first is the least
-harmful. Longest-first is also 5.3$\times$ worse on the mean (2688 against 506).
-An operator who cares primarily about the tail should not reorder without an
-anti-starvation mechanism~\cite{wu2026fastserve,pecsched}.
+than we do; since FCFS and Random differ only in whether the key is monotone in
+arrival time, this isolates starvation as the mechanism. The penalty is
+therefore the price of departing from arrival order at all, and of the three
+reorderings we test, shortest-first is the least harmful. LJF-Work is also
+5.3$\times$ worse on the mean (2688 against 506), though its tail magnitude is
+amplified by head-of-line admission, which fit-tests the largest pending request
+first. An operator who cares primarily about the tail should not reorder without
+an anti-starvation mechanism~\cite{wu2026fastserve,pecsched}.
 
 \subsection{The learned predictor earns almost nothing}
 CB-SJF-Work differs from SJF-Ctx only by the $c_d \hat{y}_i$ term. Its

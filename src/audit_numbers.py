@@ -44,6 +44,27 @@ def t2(wl, pol, col, load=0.92):
     return float(r[col].mean())
 
 
+def p99_ratio(wl, pol, load=0.92):
+    """Mean of per-window P99 ratios against FCFS.
+
+    The paper and Table II both use this estimator. An earlier revision mixed it
+    with the ratio of means, which printed two different values for the same cell
+    and reversed a comparison against the oracle.
+    """
+    piv = runs[(runs.workload == wl) & (runs.target_load == load)].pivot_table(
+        index="window", columns="policy", values="latency_p99"
+    )
+    return float((piv[pol] / piv["fcfs"]).mean())
+
+
+def max_throughput_spread_pct():
+    worst = 0.0
+    for (wl, load), cell in runs.groupby(["workload", "target_load"]):
+        s = cell.groupby("policy")["throughput_rps"].mean()
+        worst = max(worst, 100.0 * (s.max() - s.min()) / s.min())
+    return worst
+
+
 CHECKS = [
     # (label, printed value, computed value, tolerance)
     ("abstract prefill marginal conv", 91.2, work["conv"]["prefill_pct"], 0.05),
@@ -100,8 +121,7 @@ CHECKS = [
     ("VI gen>=8 improvement code", 48.5, head["code"]["improvement_gen_ge8_high_load"], 0.1),
     ("VI tail worse code cells", 31, tail[(tail.workload == "code") & (tail.target_load >= 0.85)].windows_tail_worse.sum(), 0),
     ("VI tail worse conv @.92", 12, cell(tail, "conv", 0.92, "windows_tail_worse"), 0),
-    ("VI oracle-work p99 code @.85", 1.42, cell(tail, "code", 0.85, "oracle_work_p99_s") / cell(tail, "code", 0.85, "fcfs_p99_s"), 0.02),
-    ("VI SJF-Pred worse windows code @.92", 8, cell(predtest, "code", 0.92, "windows_pred_worse"), 0),
+        ("VI SJF-Pred worse windows code @.92", 8, cell(predtest, "code", 0.92, "windows_pred_worse"), 0),
     ("VI SJF-Pred p code @.92", 0.06, cell(predtest, "code", 0.92, "wilcoxon_p_onesided"), 0.005),
     ("VI SJF-Pred p code @.98", 0.03, cell(predtest, "code", 0.98, "wilcoxon_p_onesided"), 0.005),
     ("VI predictor p code @.98", 0.009, cell(contrib, "code", 0.98, "wilcoxon_p_onesided"), 0.001),
@@ -126,10 +146,7 @@ CHECKS = [
     ("VII cache90 gap code", 74.5, float(cache[(cache.workload == "code") & (cache.cache_hit == 0.9)].oracle_gap_recovered_pct.iloc[0]), 0.1),
 
     # Added after the completeness check flagged them as uncovered.
-    ("VI tail mean code hi", 2.05, head["code"]["p99_ratio_vs_fcfs_high_load"], 0.01),
-    ("VI oracle-work p99 code @.92", 1.95, cell(tail, "code", 0.92, "oracle_work_p99_s") / cell(tail, "code", 0.92, "fcfs_p99_s"), 0.02),
-    ("VI oracle-work p99 code @.98", 3.30, cell(tail, "code", 0.98, "oracle_work_p99_s") / cell(tail, "code", 0.98, "fcfs_p99_s"), 0.02),
-    ("VI p99 max conv exact", 4.57, cell(tail, "conv", 0.98, "p99_ratio_max"), 0.01),
+                ("VI p99 max conv exact", 4.57, cell(tail, "conv", 0.98, "p99_ratio_max"), 0.01),
     ("VI p99 max code exact", 6.06, cell(tail, "code", 0.98, "p99_ratio_max"), 0.01),
     ("VI SJF-Pred sd code", 28340, float(runs[(runs.workload == "code") & (runs.target_load == 0.92) & (runs.policy == "predicted_sjf")].norm_latency_mean.std()), 5.0),
     ("VI predictor gain code @.98", 3.45, cell(contrib, "code", 0.98, "predictor_gain_pct"), 0.01),
@@ -142,12 +159,24 @@ CHECKS = [
     ("VII improvement 16x code", 50.5, float(gen[(gen.workload == "code") & (gen.gen_scale == 16.0)].improvement_pct.iloc[0]), 0.1),
     ("VII predictor gain 1x conv", 0.3, float(gen[(gen.workload == "conv") & (gen.gen_scale == 1.0)].predictor_gain_pct.iloc[0]), 0.05),
 
-    # Ordering-direction controls (LJF-Work, Random) and the cache-aware oracle.
-    ("VI LJF p99 ratio conv", 9.00, t2("conv", "ljf_work", "latency_p99") / t2("conv", "fcfs", "latency_p99"), 0.02),
-    ("VI LJF p99 ratio code", 9.68, t2("code", "ljf_work", "latency_p99") / t2("code", "fcfs", "latency_p99"), 0.02),
-    ("VI Rand p99 ratio conv", 3.81, t2("conv", "rand", "latency_p99") / t2("conv", "fcfs", "latency_p99"), 0.02),
-    ("VI Rand p99 ratio code", 5.31, t2("code", "rand", "latency_p99") / t2("code", "fcfs", "latency_p99"), 0.02),
-    ("VI CB p99 ratio conv", 0.99, t2("conv", "cb_sjf_work", "latency_p99") / t2("conv", "fcfs", "latency_p99"), 0.02),
+    # Ordering-direction controls and the cache-aware oracle. All P99 ratios use
+    # the mean-of-ratios estimator, matching Table II.
+    ("VI LJF p99 ratio conv", 7.51, p99_ratio("conv", "ljf_work"), 0.01),
+    ("VI LJF p99 ratio code", 8.82, p99_ratio("code", "ljf_work"), 0.01),
+    ("VI Rand p99 ratio conv", 3.25, p99_ratio("conv", "rand"), 0.01),
+    ("VI Rand p99 ratio code", 4.23, p99_ratio("code", "rand"), 0.01),
+    ("VI CB p99 ratio conv", 1.00, p99_ratio("conv", "cb_sjf_work"), 0.01),
+    ("VI CB p99 ratio code", 1.70, p99_ratio("code", "cb_sjf_work"), 0.01),
+    # The 2.05x quoted at the top of VI-B is this same estimator averaged over
+    # the three high loads, not the rho=0.92 cell.
+    ("VI CB p99 code hi-load avg", 2.05,
+     np.mean([p99_ratio("code", "cb_sjf_work", L) for L in (0.85, 0.92, 0.98)]), 0.01),
+    ("VI CB p99 code @.85", 1.33, p99_ratio("code", "cb_sjf_work", 0.85), 0.01),
+    ("VI CB p99 code @.98", 3.12, p99_ratio("code", "cb_sjf_work", 0.98), 0.01),
+    ("VI OracleWork p99 code @.85", 1.31, p99_ratio("code", "oracle_work", 0.85), 0.01),
+    ("VI OracleWork p99 code @.92", 1.65, p99_ratio("code", "oracle_work", 0.92), 0.01),
+    ("VI OracleWork p99 code @.98", 2.78, p99_ratio("code", "oracle_work", 0.98), 0.01),
+    ("V throughput spread", 0.07, max_throughput_spread_pct(), 0.01),
     ("VI LJF mean conv", 2688, t2("conv", "ljf_work", "norm_latency_mean"), 2.0),
     ("VI LJF vs CB mean ratio", 5.3, t2("conv", "ljf_work", "norm_latency_mean") / t2("conv", "cb_sjf_work", "norm_latency_mean"), 0.05),
     ("VII cache90 cacheaware gap conv", 66.0, float(cache[(cache.workload == "conv") & (cache.cache_hit == 0.9)].oracle_gap_recovered_cacheaware_pct.iloc[0]), 0.1),

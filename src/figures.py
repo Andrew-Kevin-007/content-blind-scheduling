@@ -151,7 +151,7 @@ def fig_predictability():
 
 def fig_main(runs: pd.DataFrame):
     """Headline: normalised latency vs offered load, per workload."""
-    fig, axes = plt.subplots(1, 2, figsize=(COL2, 2.05), sharex=True)
+    fig, axes = plt.subplots(1, 2, figsize=(COL2, 2.45), sharex=True)
     for ax, wl in zip(axes, ("conv", "code")):
         for pol in ORDER:
             sub = runs[(runs.workload == wl) & (runs.policy == pol)]
@@ -170,8 +170,12 @@ def fig_main(runs: pd.DataFrame):
         _grid(ax)
     axes[0].set_ylabel("Mean normalised latency\n(ms per output token)")
     handles, labels = axes[0].get_legend_handles_labels()
-    fig.legend(handles, labels, loc="lower center", bbox_to_anchor=(0.5, -0.13),
-               ncol=6, frameon=False, columnspacing=1.0, handlelength=1.8)
+    # The figure is placed at 0.72\textwidth, so fonts shrink by the same factor.
+    # Reserve real space beneath the axes for the legend rather than letting it
+    # ride up against the x-axis labels.
+    fig.subplots_adjust(bottom=0.30)
+    fig.legend(handles, labels, loc="lower center", bbox_to_anchor=(0.5, -0.02),
+               ncol=3, frameon=False, columnspacing=1.4, handlelength=2.0)
     out = FIGURES / "fig3_main.pdf"
     fig.savefig(out)
     plt.close(fig)

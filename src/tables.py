@@ -104,9 +104,9 @@ averaged over """ + f"{nwin['conv']}" + r""" (conversation) and """ + f"{nwin['c
 (code) disjoint windows sampled across the full week (mean\,$\pm$\,s.d.).
 $\bar{L}_n$ is mean normalised latency (ms per output token); $P_{99}$ is
 99th-percentile end-to-end latency (s); SLO is the fraction of requests meeting
-both the TTFT and TBT targets. Note that every work- or length-aware policy,
-including both oracles, degrades $P_{99}$ relative to FCFS: ordering short
-requests first defers long ones by construction.
+both the TTFT and TBT targets. Note the tail cost: on code every reordering
+degrades $P_{99}$ relative to FCFS, while on conversation at this load it is
+essentially unchanged. Section~\ref{sec:results} isolates the cause.
 $^\dagger$Oracle policies require knowledge unavailable at admission time and
 are upper bounds, not deployable systems.}
 \label{tab:main}
