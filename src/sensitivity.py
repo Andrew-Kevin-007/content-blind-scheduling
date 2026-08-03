@@ -35,17 +35,23 @@ from run import TRAIN_HOURS, TRAIN_SAMPLE, estimated_work
 GEN_SCALES = [1.0, 2.0, 4.0, 8.0, 16.0]
 CACHE_HIT = [0.0, 0.5, 0.75, 0.9]     # fraction of prompt served from cache
 LOAD = 0.92
-POLICIES = ["fcfs", "sjf_context", "cb_sjf_work", "oracle_work"]
+POLICIES = ["fcfs", "sjf_context", "cb_sjf_work", "oracle_work",
+            "oracle_work_cacheaware"]
 MAX_WINDOWS = 8
 
 
-def key_for(policy, t_ms, ctx_seen, gen, pred):
-    """Ordering key. ctx_seen is what the scheduler observes.
+def key_for(policy, t_ms, ctx_seen, ctx_exec, gen, pred):
+    """Ordering key. ctx_seen is what a content-blind scheduler observes.
 
-    Under prefix caching the scheduler still sees the FULL context length: the
-    cache-hit length depends on token identity, so computing it would require
-    reading content. This is modelled by passing the uncached ctx here while the
-    engine executes the reduced one.
+    Under prefix caching the content-blind scheduler still sees the FULL context
+    length, because cache-hit length depends on token identity and computing it
+    would require reading content. The engine meanwhile executes the reduced
+    prefill (ctx_exec).
+
+    oracle_work is handicapped the same way, which is why it converges with
+    CB-SJF-Work under caching. oracle_work_cacheaware is the honest upper bound:
+    it sees the executed prefill and therefore keeps the advantage that
+    content-blindness actually forfeits.
     """
     if policy == "fcfs":
         return t_ms
@@ -55,6 +61,8 @@ def key_for(policy, t_ms, ctx_seen, gen, pred):
         return estimated_work(ctx_seen.astype("float64"), pred)
     if policy == "oracle_work":
         return estimated_work(ctx_seen.astype("float64"), gen.astype("float64"))
+    if policy == "oracle_work_cacheaware":
+        return estimated_work(ctx_exec.astype("float64"), gen.astype("float64"))
     raise ValueError(policy)
 
 
@@ -77,7 +85,7 @@ def one(args):
 
     cap = S.measure_capacity(ctx_exec, gen_s)
     t = S.rescale_arrivals(t_ms, cap, LOAD)
-    prio = key_for(policy, t, ctx, gen_s, pred * gen_scale)
+    prio = key_for(policy, t, ctx, ctx_exec, gen_s, pred * gen_scale)
     rec, meta = S.simulate(t, ctx_exec, gen_s, prio)
     m = S.metrics(rec, meta)
 
@@ -140,6 +148,14 @@ def summarise(df, group_col):
         if "sjf_context" in piv:
             row["predictor_gain_pct"] = float(
                 100.0 * (piv["sjf_context"] - prop).mean() / piv["sjf_context"].mean()
+            )
+        if "oracle_work_cacheaware" in piv:
+            ca = piv["oracle_work_cacheaware"]
+            denom_ca = (base - ca).mean()
+            row["cb_over_cacheaware_oracle_ratio"] = float((prop / ca).mean())
+            row["oracle_gap_recovered_cacheaware_pct"] = (
+                100.0 * (base - prop).mean() / denom_ca
+                if abs(denom_ca) > 1e-12 else np.nan
             )
         out.append(row)
     return pd.DataFrame(out).sort_values(["workload", group_col])

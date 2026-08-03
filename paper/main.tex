@@ -147,10 +147,10 @@ We make the following contributions.
       unpredictable for code completion ($\rho_s = 0.107$)
       (Section~\ref{sec:characterisation}).
 \item Two negative results. A learned content-blind length predictor adds
-      almost nothing over ordering by raw context length, and ordering by
-      predicted output length alone is worse than FCFS on the code workload.
-      Under a content-blindness constraint, the effort of learning to predict
-      output length is not repaid.
+      almost nothing over ordering by raw context length, and at high load
+      ordering by predicted output length alone is worse than FCFS on the code
+      workload. Under a content-blindness constraint, the effort of learning to
+      predict output length is not repaid.
 \item An accounting of the cost side. Every work-aware or length-aware policy,
       including both oracles, degrades tail latency relative to FCFS. We report
       the magnitude rather than the mean-latency gain alone.
@@ -161,16 +161,15 @@ We make the following contributions.
 \label{sec:related}
 
 \textbf{Continuous-batching inference engines.}
-Orca~\cite{yu2022orca} introduced iteration-level scheduling, and
+Orca~\cite{yu2022orca} introduced iteration-level scheduling and
 vLLM~\cite{kwon2023pagedattention} added paged KV-cache management, together
 establishing the execution model we assume: a batch whose membership changes
 every iteration, bounded by GPU memory available for the KV cache.
-Sarathi-Serve~\cite{agrawal2024sarathi} reduces prefill-induced decode stalls by
-chunking prefills, and Splitwise~\cite{patel2024splitwise} and
-DistServe~\cite{zhong2024distserve} disaggregate the two phases onto separate
-hardware. These works change where and how prefill and decode execute;
-they are orthogonal to, and composable with, the question of which
-request to admit next, which is our subject.
+Sarathi-Serve~\cite{agrawal2024sarathi} chunks prefills to reduce decode stalls,
+and Splitwise~\cite{patel2024splitwise} and DistServe~\cite{zhong2024distserve}
+disaggregate the two phases onto separate hardware. These change where and how
+prefill and decode execute; they are orthogonal to which request to admit next,
+which is our subject.
 
 \textbf{Output-length prediction for scheduling.}
 $S^3$~\cite{jin2023s3} predicts output length with a fine-tuned DistilBERT to
@@ -188,9 +187,8 @@ PecSched~\cite{pecsched} analyses an Azure LLM inference trace, reports the same
 skewed input-length distribution we observe, and preemptively prioritises
 short-input requests at cluster scale. Both are prior art for content-blind,
 input-length-keyed scheduling, and both obtain their tail behaviour from
-preemption, which our non-preemptive setting excludes. Our question is narrower:
-given that output length is unobservable, how much of the oracle-attainable
-benefit does a scheduler forfeit?
+preemption, which our non-preemptive setting excludes. Neither quantifies what
+the unobservable component costs, which is our subject.
 
 \textbf{Production trace analysis.}
 The Azure LLM inference traces~\cite{azurepublicdataset} were released alongside
@@ -350,13 +348,12 @@ strictly content-blind.
 \section{Experimental Methodology}
 \label{sec:setup}
 
-\textbf{Simulator.} We built a discrete-event simulator of one
-continuous-batching replica with iteration-level scheduling and the KV bound of
-\eqref{eq:kv}. Prefill cost is affine in prompt tokens, decode cost affine in
-batch size, with parameters for a 13B-parameter model ($L=40$, $H=40$, $d=128$,
-fp16) on an 80\,GB accelerator, giving $B=65{,}917$ tokens. The cost model is
-analytical, not measured on our hardware; Section~\ref{sec:limits} reports a
-sensitivity analysis.
+\textbf{Simulator.} We simulate one continuous-batching replica with
+iteration-level scheduling and the KV bound of \eqref{eq:kv}. Prefill cost is
+affine in prompt tokens, decode cost affine in batch size, with parameters for a
+13B-parameter model ($L=40$, $H=40$, $d=128$, fp16) on an 80\,GB accelerator,
+giving $B=65{,}917$ tokens. The cost model is analytical, not measured on our
+hardware; Section~\ref{sec:limits} sweeps it.
 
 \textbf{Load calibration.} The published traces are fleet-aggregate (75--87
 req/s), far above single-replica capacity. We therefore measure each window's
@@ -366,13 +363,13 @@ $\{0.60, 0.75, 0.85, 0.92, 0.98\}$. This preserves the arrival process shape and
 request mix up to an affine rescaling of the clock. Measured capacity is 1.79
 req/s (conversation) and 1.41 req/s (code).
 
-Two caveats follow, because $\rho$ is easy to misread. First, $\mu$ is measured
-at maximum concurrency, where the per-iteration base cost amortises over a full
-batch, whereas the runs operate at smaller batches; measured utilisation
-therefore exceeds $\rho$ substantially, reaching 0.91 (conversation) and 0.71
-(code) at $\rho=0.60$. Read $\rho$ as a control variable, not as utilisation.
-Second, this does not bias the comparison: throughput is identical across
-policies to four significant figures.
+Two caveats, because $\rho$ is easy to misread. First, $\mu$ is measured at
+maximum concurrency where the per-iteration base cost amortises over a full
+batch, whereas the runs operate at smaller batches, so measured utilisation
+exceeds $\rho$ substantially: 0.91 (conversation) and 0.71 (code) at
+$\rho=0.60$. Read $\rho$ as a control variable, not as utilisation. Second, this
+does not bias the comparison: throughput agrees across policies to within
+0.06\% at every load.
 
 \textbf{Windows.} We evaluate the first 20{,}000 requests of each of 20
 (conversation) and 11 (code) windows sampled at even intervals across the full
@@ -417,13 +414,13 @@ point the policies separate.
 
 \begin{figure*}[!t]
   \centering
-  \includegraphics[width=0.92\textwidth]{../figures/fig3_main.pdf}
+  \includegraphics[width=0.80\textwidth]{../figures/fig3_main.pdf}
   \caption{Mean normalised latency against offered load, over 20 (conversation)
   and 11 (code) windows sampled across a full production week (error bars:
   s.d.). Below $\rho\approx0.75$ the queue is shallow and all policies nearly
   coincide. CB-SJF-Work tracks Oracle-Work closely and is visually
   indistinguishable from SJF-Ctx; SJF-Pred, which orders by predicted output
-  length, diverges and on the code workload is worse than FCFS.}
+  length, diverges and at high load on the code workload is worse than FCFS.}
   \label{fig:main}
 \end{figure*}
 
@@ -450,10 +447,11 @@ requests could dominate the mean in a way that rewards shortest-first ordering
 by construction. They do carry it disproportionately: at $\rho=0.92$ requests
 emitting at most four tokens are 10.9\% (conversation) and 36.5\% (code) of
 arrivals but 50.2\% and 78.6\% of total normalised latency. Restricted to
-requests emitting at least
-eight tokens, the improvement at $\rho \ge 0.85$ is 47.0\% and 48.5\% against
-51.5\% and 58.8\%, and stays positive in all 20 and 11 windows. The headline is
-inflated by short requests but not an artifact of them.
+requests emitting at least eight tokens, the improvement at $\rho \ge 0.85$ is
+47.04\% and 48.5\% against 51.5\% and 58.8\%, positive in all 31 windows. The
+inflation grows as load falls: at $\rho=0.75$ the restricted improvement on code
+is 11.1\% against 22.9\%. The headline is inflated by short requests but not an
+artifact of them.
 
 \subsection{The mean-latency gain is paid for in the tail}
 Shortest-first ordering reduces the mean by deferring long requests, so it must
@@ -472,10 +470,10 @@ equally, with $P_{99}$ ratios against FCFS of 1.42$\times$, 1.95$\times$ and
 3.30$\times$ on code at the three highest loads, slightly worse than ours, and
 Oracle-SJF is worse still (1261\,s against our 556\,s at $\rho=0.92$). Perfect
 knowledge of output length makes the tail worse, not better. This isolates the
-information constraint, not the ordering discipline: both policies order by
-estimated work, and separating those would need a non-shortest-first work-aware
-control we do not have. An operator who cares primarily about the tail should
-not deploy these policies without an anti-starvation mechanism; preemptive
+information constraint rather than the ordering discipline: both policies order
+by estimated work, and separating them would need a non-shortest-first control
+we do not have. An operator who cares primarily about the tail should not deploy
+these policies without an anti-starvation mechanism; preemptive
 schedulers~\cite{wu2026fastserve,pecsched} address exactly this.
 
 \subsection{The learned predictor earns almost nothing}
@@ -507,13 +505,12 @@ ours cannot see.
 CB-SJF-Work roughly doubles SLO attainment over FCFS, 34.5\% against 18.8\%
 (conversation) and 15.4\% against 8.6\% (code), matching Oracle-Work to within
 0.1 points; SJF-Ctx matches both, so here too the gain comes from ordering by
-context length. Attainment falls steeply with load, from 54.3\% to 31.1\%
-(conversation) and 34.5\% to 13.4\% (code) between $\rho=0.60$ and $\rho=0.98$,
-so contention accounts for much of it. It is not the whole story: even at our
-lowest load 46\% and 66\% of requests miss the target, because a single
-unchunked prefill step for a multi-thousand-token prompt consumes much of the
-2\,s time-to-first-token budget before any queueing. The comparison between
-policies stands; the absolute level is not a claim about production attainment.
+context length. Attainment falls steeply with load, from 54.3\% to 31.1\% (conversation) and
+34.5\% to 13.4\% (code), so contention accounts for much of it. It is not the
+whole story: even at our lowest load 46\% and 66\% of requests miss the target,
+because one unchunked prefill step for a multi-thousand-token prompt consumes
+much of the 2\,s time-to-first-token budget before any queueing. The comparison
+between policies stands; the absolute level is not a claim about production.
 
 % ============================================================================
 \section{Limitations and Threats to Validity}
@@ -536,15 +533,17 @@ our engine; scaling a decode cost coefficient alone leaves the KV footprint
 untouched and is uninformative.
 
 \textbf{Longer generations, including reasoning and agentic workloads.} Scaling
-output length up to 16$\times$  drives the prefill share
-of engine time from 75.4\% to 11.2\% on conversation. The improvement over FCFS
-does not collapse; it rises, from 46.0\% to 75.1\%, because ordering by
-observable work stays a good ordering even when the observable term is no longer
-the majority. What degrades is the price of content-blindness: CB-SJF-Work runs
+output length up to 16$\times$ drives the prefill share of engine time from
+75.4\% to 11.2\% on conversation and from 92.9\% to 48.8\% on code. The
+improvement over FCFS does not collapse, but the workloads move in opposite
+directions: on conversation it rises from 46.0\% to 75.1\%, while on code it
+declines from 63.3\% to 50.5\%. In neither case does ordering by observable work
+stop being a good ordering, even where that work becomes a minority of engine
+time. What degrades in both is the price of content-blindness: CB-SJF-Work runs
 1.08$\times$ the mean normalised latency of Oracle-Work at $1\times$ but
 3.76$\times$ at $16\times$ (conversation) and 5.53$\times$ (code), and the
-learned predictor, worth 0.3\% today, becomes worth 21.1\%. For long-generation
-workloads our conclusions would need revisiting.
+learned predictor, worth 0.3\% today, becomes worth 21.1\%. Our conclusions
+would need revisiting for long-generation workloads.
 
 \textbf{Prefix caching.} This is the most serious threat and the traces cannot
 answer it: production stacks serve repeated prefixes from cache, multi-turn
@@ -588,7 +587,7 @@ suggest. Prefill, the component observable without reading content, is the
 larger part of service work on these traces, and ordering by estimated total
 work recovers 79.3\% to 90.3\% of the oracle-attainable improvement in mean
 normalised latency and roughly doubles SLO attainment, even on a workload where
-output length is statistically unpredictable from metadata.
+output length is negligibly correlated with anything the scheduler can see.
 
 Three qualifications belong with it. The gain is paid for in the tail, and an
 oracle scheduler pays the same price. A learned output-length predictor is not
