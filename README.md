@@ -1,4 +1,4 @@
-# What Does Content-Blindness Cost? Scheduling LLM Inference Without Reading the Prompt
+# Quantifying the Cost of Content-Blindness in LLM Inference Scheduling
 
 Submission to **ICCCIoT-2026 / IC3IoT-2026**, Track 4 (Blockchain, Cloud
 Computing and Big Data Analytics). Paper: `paper/main.pdf` (6 pages, IEEE
