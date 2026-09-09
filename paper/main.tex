@@ -243,10 +243,8 @@ context-to-output token ratios of 15.5:1 and 110.7:1. That ratio is a property
 of the traffic and involves no cost model at all.
 
 Equation~\eqref{eq:work} is an attribution convention, not a measurement of
-engine time, because it charges decode only its marginal cost and assigns the
-per-iteration base cost to the batch rather than to any request. Since our
-argument rests on this split, we also report the other natural accounting:
-the fraction of busy time our simulated engine actually spends in prefill
+engine time. We also report the other natural accounting:
+the fraction of busy time our simulated engine spends in prefill
 steps. That fraction is load-dependent, because larger batches amortise the
 base decode cost over more requests. At $\rho=0.60$ it is 53.9\% (conversation)
 and 81.8\% (code); at $\rho=0.92$ it is 75.6\% and 92.4\%. The two accountings
@@ -367,8 +365,8 @@ req/s (conversation) and 1.41 req/s (code).
 Two caveats apply, because $\rho$ is easy to misread. First, $\mu$ is measured at
 maximum concurrency where the per-iteration base cost amortises over a full
 batch, whereas the runs operate at smaller batches, so measured utilisation
-exceeds $\rho$ substantially: 0.91 (conversation) and 0.71 (code) at
-$\rho=0.60$. Read $\rho$ as a control variable, not as utilisation. Second, this
+exceeds $\rho$: 0.91 (conversation) and 0.71 (code) at
+$\rho=0.60$. Second, this
 does not bias the comparison: throughput agrees across all eight policies to
 within 0.07\% at every load.
 
@@ -394,9 +392,9 @@ The oracles need information unavailable at admission and are upper bounds, not
 deployable systems.
 
 \textbf{Metrics.} Mean normalised latency $\bar{L}_n$ (end-to-end latency per
-output token), 99th-percentile end-to-end latency, and SLO attainment, the
-fraction of requests meeting both a 2\,s time-to-first-token and a 100\,ms
-time-between-tokens target.
+output token), 99th-percentile end-to-end latency, and service-level objective (SLO) attainment, the
+fraction of requests meeting both a 2\,s time-to-first-token (TTFT) and a 100\,ms
+time-between-tokens (TBT) target.
 
 % ============================================================================
 \section{Results}
@@ -532,8 +530,7 @@ the absolute level is not a claim about production.
 The two sweeps below use the first eight evaluation windows per workload rather
 than all 20 and 11. Their baseline therefore differs from
 Table~\ref{tab:main}: the ratio-of-means estimator is sensitive to window
-membership, giving 46.0\% at $\rho=0.92$ here against 56.5\% there. Read them as
-trends within a fixed window set, not as headline numbers.
+membership, giving 46.0\% at $\rho=0.92$ here against 56.5\% there.
 
 \textbf{The cost model is analytical.} We do not have access to the accelerator
 hardware these traces were served on, and our coefficients are modelled rather
@@ -566,7 +563,7 @@ scheduler still observes the full context length (cache-hit length depends on
 token identity and so is not content-blind), the improvement over FCFS falls to
 12.8\% (conversation) and 14.8\% (code) at a 90\% hit rate; on code the decline
 is a cliff rather than a slope, 48.6\% at a 75\% hit rate. Measured against an
-oracle that is itself denied cache residency the recovered gap appears to hold
+oracle that is itself denied cache residency, the recovered gap appears to hold
 up, at 85.5\% and 74.5\%, but that comparison flatters us: both policies then
 order by the same inflated prefill estimate and converge for that reason.
 Against a cache-aware oracle, which sees the executed prefill, the recovered gap
@@ -577,13 +574,15 @@ main open problem this work exposes.
 no preemption, swapping, or aging. This isolates the effect of admission
 information, and it is also why our tails degrade; preemptive
 schedulers~\cite{wu2026fastserve,pecsched} address that failure mode. Our
-oracles are upper bounds on admission-order policies specifically. We likewise
+oracles are upper bounds on admission-order policies. We likewise
 model a single replica without chunked prefill~\cite{agrawal2024sarathi} or
 phase disaggregation~\cite{patel2024splitwise,zhong2024distserve}. Chunking does
-not change total prefill work or KV occupancy, which is what binds here, so we
+not change total prefill work or KV occupancy, so we
 expect the central claim to survive, but we have not verified it. Finally, two
-workloads from one provider over one week support a claim about the regime we
-measured, not a universal one.
+workloads from one provider over one week bound a claim about the regime we
+measured, not a universal one. That regime has a context-to-output ratio of
+15.5:1 and 110.7:1, and the $16\times$ sweep above is evidence along that
+axis: the advantage rises on conversation and falls on code.
 
 \textbf{Reproducibility.} All experiments use public data. Windows are selected
 deterministically, the pipeline is content-hashed to verify byte-identical
