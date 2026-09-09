@@ -31,7 +31,7 @@
 \usepackage{url}
 
 \newif\ifblindreview
-\blindreviewtrue   % Set to \blindreviewfalse ONLY for camera-ready
+\blindreviewfalse   % Set to \blindreviewfalse ONLY for camera-ready
 
 % Break chosen so both lines fit the measure; a longer first line silently
 % wraps and strands a single word on its own line.
@@ -50,7 +50,7 @@ in LLM Inference Scheduling}
   % review copy must stay anonymous. Complete as of 2026-08-03: no placeholders
   % remain, so the camera-ready build needs only the flag flipped.
   \author{
-    \IEEEauthorblockN{Kevin Andrew}
+    \IEEEauthorblockN{Kevin Andrew A}
     \IEEEauthorblockA{\textit{Dept. of Information Technology} \\
                       \textit{Loyola-ICAM College of Engineering and Technology}\\
                       Chennai, India \\ kevinandrew.27it@licet.ac.in}
@@ -81,7 +81,7 @@ prefill is 91.2\% and 98.7\% of attributable marginal work and 76\% and 92\% of
 measured engine time at high load. We evaluate CB-SJF-Work, which orders
 admissions by estimated total service work using only token counts and arrival
 metadata. Over 20 (conversation) and 11 (code) windows sampled across a full
-production week it reduces mean normalised latency by 51.5\% and 58.8\% relative
+production week, it reduces mean normalised latency by 51.5\% and 58.8\% relative
 to FCFS, recovering 90.3\% and 79.3\% of the improvement attainable by an
 output-length oracle. Two findings qualify this. The benefit is not free:
 shortest-first ordering defers long requests, and 99th-percentile latency
@@ -294,9 +294,7 @@ $c_d \hat{y}_i$ contributes only a small share of $\widehat{W}_i$, the policy
 degrades gracefully: when $\hat{y}_i$ is uninformative, the ranking is still
 governed by the exactly-known prefill term.
 
-CB-SJF-Work is not offered as a novel mechanism. Scheduling on input length is
-established practice~\cite{wu2026fastserve,pecsched} and its learned term earns
-almost nothing (Section~\ref{sec:results}). It is the natural content-blind
+CB-SJF-Work is not offered as a novel mechanism. It is the natural content-blind
 policy, used here as an instrument: placed between FCFS and an oracle, it
 measures what the information constraint costs.
 
@@ -366,7 +364,7 @@ $\{0.60, 0.75, 0.85, 0.92, 0.98\}$. This preserves the arrival process shape and
 request mix up to an affine rescaling of the clock. Measured capacity is 1.79
 req/s (conversation) and 1.41 req/s (code).
 
-Two caveats, because $\rho$ is easy to misread. First, $\mu$ is measured at
+Two caveats apply, because $\rho$ is easy to misread. First, $\mu$ is measured at
 maximum concurrency where the per-iteration base cost amortises over a full
 batch, whereas the runs operate at smaller batches, so measured utilisation
 exceeds $\rho$ substantially: 0.91 (conversation) and 0.71 (code) at
@@ -436,7 +434,7 @@ the conversation workload and 79.3\% on code. The improvement is positive in
 every window at every load above $\rho=0.75$ (one-sided Wilcoxon signed-rank,
 $p < 10^{-3}$).
 
-Two cautions on reading these percentages. The headline is a ratio of means, so
+Two cautions bear on reading these percentages. The headline is a ratio of means, so
 it is weighted by whichever window has the worst FCFS run; the per-window range
 in Table~\ref{tab:recovery} is wide (6\% to 77\% on conversation at $\rho \ge
 0.85$) and the mean of per-window improvements is 47.0\%, not 51.5\%. And the
@@ -453,7 +451,7 @@ emitting at most four tokens are 10.9\% and 36.5\% of arrivals but 50.2\% and
 eight tokens, the improvement at $\rho \ge 0.85$ is 47.04\% and 48.5\% against
 51.5\% and 58.8\%, positive in all 20 and 11 windows, though the inflation grows as
 load falls: at $\rho=0.75$ the restricted improvement on code is 11.1\% against
-22.9\%. The headline is inflated by short requests but not an artifact of them.
+22.9\%. The headline is inflated by short requests but not an artefact of them.
 
 \subsection{The mean-latency gain is paid for in the tail}
 Shortest-first ordering reduces the mean by deferring long requests, so it must
@@ -563,7 +561,7 @@ workloads.
 \textbf{Prefix caching.} This is the most serious threat and the traces cannot
 answer it: production stacks serve repeated prefixes from cache, multi-turn
 conversation has the highest hit rates, and the traces record context length but
-not cache residency. Reducing executed prefill to model a hit rate, while the
+not cache residency. If we reduce executed prefill to model a hit rate, while the
 scheduler still observes the full context length (cache-hit length depends on
 token identity and so is not content-blind), the improvement over FCFS falls to
 12.8\% (conversation) and 14.8\% (code) at a 90\% hit rate; on code the decline
@@ -576,7 +574,7 @@ falls to 66.0\% and 69.8\%. Prefix-cache-aware content-blind scheduling is the
 main open problem this work exposes.
 
 \textbf{Non-preemptive admission.} Our scheduler controls admission order only:
-no preemption, swapping or aging. This isolates the effect of admission
+no preemption, swapping, or aging. This isolates the effect of admission
 information, and it is also why our tails degrade; preemptive
 schedulers~\cite{wu2026fastserve,pecsched} address that failure mode. Our
 oracles are upper bounds on admission-order policies specifically. We likewise
@@ -605,12 +603,6 @@ larger part of service work on these traces, and ordering by estimated total
 work recovers 79.3\% to 90.3\% of the oracle-attainable improvement in mean
 normalised latency and roughly doubles SLO attainment, even on a workload where
 output length is negligibly correlated with anything the scheduler can see.
-
-Three qualifications belong with it. The gain is paid for in the tail, and an
-oracle scheduler pays the same price. A learned output-length predictor is not
-worth deploying on today's traces, though it becomes worth 21\% once generations
-are 16$\times$ longer. And prefix caching, which these traces cannot expose,
-would shrink the benefit for every policy studied here.
 
 The practical implication is narrow but useful: on workloads resembling these, a
 scheduler that never sees prompt content gives up little, and ordering by

@@ -1,0 +1,149 @@
+%--------------------------------------------------
+\documentclass[11pt]{article}
+
+%--------------------------------------------------
+% PACKAGES
+%--------------------------------------------------
+\usepackage[a4paper,top=2.0cm,bottom=2.0cm,left=2.0cm,right=2.0cm]{geometry}
+
+\usepackage{wrapfig}
+\usepackage{graphicx}
+\usepackage{amssymb,amsfonts,amsmath,amsthm}
+\usepackage{xcolor}
+\usepackage{fancyhdr}
+\usepackage{cite}
+\usepackage{hyperref}
+\usepackage[mathscr]{euscript}
+\usepackage{setspace}
+
+%--------------------------------------------------
+% COLORS
+%--------------------------------------------------
+\definecolor{color1}{rgb}{0.75,0.2,0.5}
+\definecolor{color2}{rgb}{0.5,0.1,0.5}
+
+%--------------------------------------------------
+% COMMANDS
+%--------------------------------------------------
+\newcommand{\showuc}[1]{\MakeUppercase{#1}}
+
+\newcommand{\doublerule}[1][.4pt]{%
+	\noindent
+	\makebox[0pt][l]{\rule[.7ex]{\linewidth}{#1}}%
+	\rule[.3ex]{\linewidth}{#1}}
+
+\newcommand{\raisedrule}[2][0pt]{%
+	\leaders
+	\hbox{%
+		\makebox[0pt][l]{\rule[#1]{1pt}{#2}}%
+		\rule[\dimexpr#1+.4ex]{1pt}{#2}%
+	}\hfill}
+
+%--------------------------------------------------
+% GENERAL FORMATTING
+%--------------------------------------------------
+\setlength{\parindent}{0pt}
+\setlength{\parskip}{0pt}
+\linespread{1.05}
+
+\allowdisplaybreaks
+\raggedbottom
+
+%--------------------------------------------------
+% FOOTER
+%--------------------------------------------------
+\pagestyle{fancy}
+\fancyhf{}
+
+\fancyfoot[C]{%
+    \parbox{0.95\textwidth}{%
+        \centering
+        \fontsize{8}{9}\selectfont
+        \textcolor{gray}{%
+        INTERNATIONAL CONFERENCE ON COMMUNICATION, COMPUTING AND INTERNET OF THINGS 2026}
+        \\[2pt]
+        \textcolor{gray}{\thepage}
+    }%
+}
+
+\renewcommand{\headrulewidth}{0pt}
+\renewcommand{\footrulewidth}{0pt}
+
+%--------------------------------------------------
+% FIRST PAGE FOOTER
+%--------------------------------------------------
+\fancypagestyle{plain}{%
+    \fancyhf{}
+    \fancyfoot[C]{%
+        \parbox{0.95\textwidth}{%
+            \centering
+            \fontsize{8}{9}\selectfont
+            \textcolor{gray}{%
+            INTERNATIONAL CONFERENCE ON COMMUNICATION, COMPUTING AND INTERNET OF THINGS}
+            \\[2pt]
+            \textcolor{gray}{\thepage}
+        }%
+    }
+    \renewcommand{\headrulewidth}{0pt}
+    \renewcommand{\footrulewidth}{0pt}
+}
+
+%--------------------------------------------------
+\begin{document}
+
+\pagenumbering{Roman}
+
+\vspace*{-0.5cm}
+
+%--------------------------------------------------
+% TITLE AND AUTHOR DETAILS
+%--------------------------------------------------
+
+\begin{center}
+
+{\color{color2}{\large\bfseries
+\showuc{Quantifying the Cost of Content-Blindness in LLM Inference Scheduling}}}
+
+\vspace{0.15cm}
+
+{\bfseries Kevin Andrew A$^{1}$, Kavita Sri$^{1}$}
+
+\vspace{0.08cm}
+
+$^{1}$ Department of Information Technology, Loyola-ICAM College of Engineering and Technology, Chennai, 600034, Tamil Nadu, India
+
+\vspace{0.08cm}
+
+{\bfseries Email:}
+kevinandrew.27it@licet.ac.in$^1$,
+kavitasri.27it@licet.ac.in$^1$
+
+\end{center}
+
+%--------------------------------------------------
+% ABSTRACT
+%--------------------------------------------------
+
+\vspace{-0.05cm}
+
+\noindent
+{\bfseries Abstract:}
+Large language model (LLM) inference services schedule requests without knowing how many tokens each will generate. Because a long response occupies a batch slot for many iterations, first-come-first-serve (FCFS) scheduling suffers head-of-line blocking, and a substantial literature therefore predicts output length from the prompt text in order to approximate shortest-job-first. Reading prompt content is precisely what a privacy-constrained or regulated serving platform cannot do. We quantify what that restriction costs. Analysing 44.1 million requests from Microsoft Azure's production LLM inference traces, we observe that service work splits into a prefill component, exactly observable at admission from the context length, and a decode component, not observable until the request completes, and that the observable component is the larger one: prefill is 91.2\% and 98.7\% of attributable marginal work and 76\% and 92\% of measured engine time at high load. We evaluate CB-SJF-Work, which orders admissions by estimated total service work using only token counts and arrival metadata. Over 20 (conversation) and 11 (code) windows sampled across a full production week, it reduces mean normalised latency by 51.5\% and 58.8\% relative to FCFS, recovering 90.3\% and 79.3\% of the improvement attainable by an output-length oracle. Two findings qualify this. The benefit is not free: shortest-first ordering defers long requests, and 99th-percentile latency degrades by 1.9$\times$ and 3.1$\times$ on average at the highest load, and by up to 4.6$\times$ and 6.1$\times$ in the worst window, a cost an oracle scheduler also incurs. And a learned content-blind length predictor contributes almost nothing over ordering by raw context length, reaching significance only at the highest load. For these workloads the information a scheduler is denied is largely the information it least needs.
+
+\vspace{0.12cm}
+
+%--------------------------------------------------
+% KEYWORDS
+%--------------------------------------------------
+
+\noindent
+{\bfseries Keywords:}
+LLM inference serving, cloud scheduling, head-of-line blocking, privacy-preserving systems, production trace analysis, big data architectures.
+
+\vfill
+
+\begin{center}
+{\bfseries ***********}
+\end{center}
+
+\end{document}
