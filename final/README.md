@@ -1,0 +1,92 @@
+# ICCCIoT-2026 — Paper 548, final submission set
+
+**Quantifying the Cost of Content-Blindness in LLM Inference Scheduling**
+Kevin Andrew A, Kavita Sri — Dept. of Information Technology,
+Loyola-ICAM College of Engineering and Technology, Chennai.
+
+Assembled 10 Sep 2026. Everything here is verified, not assumed; the checks
+are listed against each file.
+
+---
+
+## Deliverables
+
+| File | What it is | Verified |
+|---|---|---|
+| `548-camera-ready.pdf` | The camera-ready paper | 6 pages · US Letter 612×792 pt · 20/20 fonts embedded · 0 Type 3 · 0 overfull boxes · 0 undefined refs · 11/11 citations resolved |
+| `548-camera-ready.docx` | Word CRC, for the third CMT slot | Two-column IEEE layout · authors side by side · equations as **real text with true subscripts**, not images · 1 embedded image (the figure, 79 KB) · 3 tables |
+| `548.pdf` | One-page abstract, organisers' template | 1 page · A4 (template default) · 0 Type 3 · abstract text extracted programmatically from `main.tex`, so it cannot drift from the paper |
+
+## Source
+
+`source/` rebuilds `548-camera-ready.pdf` from scratch. The layout mirrors the
+working tree because `main.tex` includes the figure as `../figures/`.
+
+```
+cd source/paper
+pdflatex main.tex && pdflatex main.tex
+```
+
+Confirmed: this produces a 6-page, 286,669-byte PDF with the same two
+(underfull, i.e. cosmetic) box warnings as the shipped build. PDF hashes differ
+between runs only because pdfTeX embeds a build timestamp.
+
+`source/Abstract-template-from-organisers.tex` is the unmodified template that
+came with the acceptance email, kept for provenance.
+
+---
+
+## Reviewer #1 response (already in this build)
+
+- Generalizability scoped explicitly: the claim is bounded to the measured
+  regime, with its context-to-output ratios (15.5:1 and 110.7:1) stated and the
+  16× sweep offered as evidence along that axis.
+- `SLO`, `TTFT`, `TBT` now expanded at first use.
+
+## Word CRC — repairs applied
+
+The `.docx` is generated, not a PDF conversion. Four defect classes were found
+and fixed in this copy:
+
+1. **Algorithm 1** was mangled — lines 1, 2, 6, 7 were empty (the `on arrival`
+   statement and `break` had been dropped), comments were orphaned, and literal
+   `\{i\}` backslashes leaked. Rebuilt as 11 correctly numbered lines against
+   the `algorithmic` source.
+2. **10 leaked `\ref` label names** (`Section characterisation`,
+   `Table recovery`, …) resolved to their real numbers from `main.aux`.
+3. **8 orphan `\label{}` paragraphs** (`sec:intro`, `sec:setup`, …) were
+   visible in the body; deleted.
+4. **41 literal underscore subscripts** (`P_99`, `y_i`, `ρ_s`, …) converted to
+   real Word subscript runs. Minus sign in eq. (3) corrected to U+2212.
+5. **7 dropped hat accents in prose.** The generator lost `\hat{y}` and
+   `\widehat{W}`, which made one sentence contradict itself — it read
+   *"charges the true output length yᵢ, not the estimate yᵢ."* Restored; the docx
+   now carries exactly 10 hat glyphs, matching the 10 hat macros in `main.tex`.
+
+Verified after repair: 0 ref leaks, 0 underscore math, 0 orphan labels, 0 stray
+braces, 0 literal backslashes, 10/10 hats, 1 image (the figure), 3 tables.
+
+> Do **not** substitute a PDF→Word conversion here. The online conversion tried
+> earlier rasterised maths into 22 sub-2 KB PNGs and dropped the `W` from
+> equation (2). The acceptance letter forbids that: *"All mathematical equations
+> must be prepared using an appropriate Equation Editor or MathType and should
+> not be inserted as images or screenshots."*
+
+**Not verified:** the `.docx` page count. Word COM automation is unreliable on
+this machine (it failed three times). Open it in Word and check before
+uploading if page count matters for that slot.
+
+---
+
+## Open items
+
+- **IEEE eCopyright** — still not enabled by the organisers (error 1003,
+  Source Code 69784). Blocked on them; no action available.
+- **Third CMT file** — worth confirming with the committee. Their email lists
+  *"Camera ready paper, IEEE ecopyright and Abstract Submission in CMT"* — three
+  items. The third slot may want the **signed eCopyright form**, not a `.docx`.
+  That would explain why it cannot be satisfied yet.
+- **Re-upload** the camera-ready to CMT; the copy currently uploaded there is an
+  older build without the reviewer response.
+- §VII promises *"Code will be released upon acceptance"* — public release still
+  pending.

@@ -1,8 +1,10 @@
 # Quantifying the Cost of Content-Blindness in LLM Inference Scheduling
 
-Submission to **ICCCIoT-2026 / IC3IoT-2026**, Track 4 (Blockchain, Cloud
-Computing and Big Data Analytics). Paper: `paper/main.pdf` (6 pages, IEEE
-conference format, anonymized for double-blind review).
+Accepted at **ICCCIoT-2026 / IC3IoT-2026**, Track 4 (Blockchain, Cloud
+Computing and Big Data Analytics), 24-25 September 2026. Paper:
+`paper/main.pdf` (6 pages, IEEE conference format, camera-ready).
+
+The camera-ready submission set is in `final/`.
 
 ## Claim
 
@@ -90,9 +92,8 @@ results/            raw run records and derived summaries (committed on purpose)
 - [x] 6 pages, within limit
 - [x] Zero Type 3 fonts, all fonts embedded (IEEE PDF eXpress prerequisite)
 - [x] Zero overfull boxes, zero undefined references
-- [x] Anonymized (`\blindreviewtrue`) — double-blind review
-- [x] Every citation verified against a primary source
-- [ ] Similarity check ≤20% (Turnitin/iThenticate) — run before upload
-- [ ] Upload to <https://cmt3.research.microsoft.com/ICCCIOT2026>
-      (the conference site's own footer links a **stale 2024 portal** — ignore it)
-- [ ] Set `\blindreviewfalse` and fill the author block **only** for camera-ready
+- [x] De-anonymised for camera-ready (`\blindreviewfalse`), author block filled
+- [x] Reviewer #1 response incorporated (generalizability scope; SLO/TTFT/TBT defined)
+- [x] Every citation verified against a primary source, re-verified 2026-09-11
+- [x] All 167 numeric claims machine-traced to `results/` (`python src/audit_numbers.py`)
+- [ ] IEEE eCopyright — blocked on the organisers, not yet enabled

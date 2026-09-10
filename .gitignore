@@ -34,3 +34,9 @@ desktop.ini
 # Inspection renders (regenerate with pdftoppm)
 paper/pg-*.png
 figures/*.png
+
+# Word lock files
+~$*
+
+# final/ is the frozen submission set: its .bbl must ship so it rebuilds
+!final/source/paper/main.bbl
