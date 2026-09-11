@@ -11,11 +11,26 @@ are listed against each file.
 
 ## Deliverables
 
-| File | What it is | Verified |
+Upload exactly these three to CMT, with these exact filenames (per the
+conference team's email of 11 Sep 2026):
+
+| Upload as | File here | Verified |
 |---|---|---|
-| `548-camera-ready.pdf` | The camera-ready paper | 6 pages · US Letter 612×792 pt · 20/20 fonts embedded · 0 Type 3 · 0 overfull boxes · 0 undefined refs · 11/11 citations resolved |
-| `548-camera-ready.docx` | Word CRC, for the third CMT slot | Two-column IEEE layout · authors side by side · equations as **real text with true subscripts**, not images · 1 embedded image (the figure, 79 KB) · 3 tables |
-| `548.pdf` | One-page abstract, organisers' template | 1 page · A4 (template default) · 0 Type 3 · abstract text extracted programmatically from `main.tex`, so it cannot drift from the paper |
+| `548_CameraReady.pdf` | `548_CameraReady.pdf` | 6 pages · US Letter 612×792 pt · 20/20 fonts embedded · 0 Type 3 · 0 overfull boxes · 11/11 citations · 167/167 numeric claims traced to `results/` |
+| `548_Abstract.pdf` | `548_Abstract.pdf` | 1 page · organisers' template · abstract extracted programmatically from `main.tex`, so it cannot drift |
+| `548_CameraReady.docx` | `548_CameraReady.docx` | 6 pages in Word · two-column IEEE · equations as real text with true subscripts, not images · 1 embedded image (the figure) · 3 tables |
+
+**File 3 is the Word document itself**, not the IEEE copyright form — confirmed
+by the conference team. eCopyright is a separate, unrelated step.
+
+### PDF / Word content equivalence
+
+The team requires both versions to carry the same final content. Checked
+mechanically: all 28 headline figures appear in both, and the only numeric
+differences are artefacts of extraction, not content — the PDF's Fig. 1 axis
+and log-scale labels (0.60–0.98, 10²–10⁵) are selectable text in LaTeX but
+pixels inside the embedded image in Word. Citations render `[9], [10]` in the
+PDF and `[9, 10]` in Word; same references, both valid IEEE.
 
 ## Source
 
