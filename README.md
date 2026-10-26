@@ -4,6 +4,8 @@ Accepted at **ICCCIoT-2026 / IC3IoT-2026**, Track 4 (Blockchain, Cloud
 Computing and Big Data Analytics), 24-25 September 2026. Paper:
 `paper/main.pdf` (6 pages, IEEE conference format, camera-ready).
 
+Authors: Kevin Andrew A, Kavita Sri. Project page: https://www.kevinandrew.tech/research/content-blind-scheduling
+
 The camera-ready submission set is in `final/`.
 
 ## Claim
