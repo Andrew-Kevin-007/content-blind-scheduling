@@ -1,6 +1,6 @@
 # Quantifying the Cost of Content-Blindness in LLM Inference Scheduling
 
-Accepted at **ICCCIoT-2026 / IC3IoT-2026**, Track 4 (Blockchain, Cloud
+Accepted at **ICCCIoT-2026**, Track 4 (Blockchain, Cloud
 Computing and Big Data Analytics), 24-25 September 2026. Paper:
 `paper/main.pdf` (6 pages, IEEE conference format, camera-ready).
 
